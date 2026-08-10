@@ -20,3 +20,11 @@ My code files created while completing nand2tetris course
       ↓
 ⑨ Two-pass assembler
 ```
+## DONE
+- produces `.hack` file with binary instructions
+- removes whitespaces
+- removes comments
+- validates labels, variables
+- gives pinpoint error line and description
+- robust error handling
+- robust validation
