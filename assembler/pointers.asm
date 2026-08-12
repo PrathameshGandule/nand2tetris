@@ -1,4 +1,4 @@
-// Program: PointerDemo.asm
+// Program: pointers.asm
 // Starting at the address stored in R0,
 // sets the first R1 words to –1
 // i = 0
