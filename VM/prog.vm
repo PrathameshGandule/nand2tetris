@@ -1,0 +1,12 @@
+push constant 10
+pop local 0
+push constant 21
+		push constant 22
+
+// hello
+pop argumet 2
+pop argument 8
+
+
+push cons 36
+pop this 8
