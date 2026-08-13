@@ -3,12 +3,24 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <unordered_set>
+#include <unordered_map>
 #include <vector>
 using namespace std;
 
 const string WHITESPACE = " \n\r\t\f\v";
-const string SP = "R0";
+
+enum class ACTION { PUSH, POP, ADD, SUB, NEG, EQ, GT, LT, AND, OR, NOT };
+
+enum class SEGMENT {
+	LOCAL,
+	ARGUMENT,
+	STATIC,
+	CONSTANT,
+	THIS,
+	THAT,
+	TEMP,
+	POINTER
+};
 
 enum STATUS {
 	SUCCESS,
@@ -22,17 +34,32 @@ enum STATUS {
 	INVALID_OPERATION,
 };
 
-enum class SEGMENT {
-	LOCAL,
-	ARGUMENT,
-	STATIC,
-	CONSTANT,
-	THIS,
-	THAT,
-	TEMP,
-	POINTER
-};
-string seg_to_string(SEGMENT segment) {
+// unordered_set<string> actions = {"push", "pop"};
+unordered_map<string, ACTION> actions({
+	{"push", ACTION::PUSH},
+	{"pop", ACTION::POP},
+	{"add", ACTION::ADD},
+	{"sub", ACTION::SUB},
+	{"neg", ACTION::NEG},
+	{"eq", ACTION::EQ},
+	{"gt", ACTION::GT},
+	{"lt", ACTION::LT},
+	{"and", ACTION::AND},
+	{"or", ACTION::OR},
+	{"not", ACTION::NOT},
+});
+unordered_map<string, SEGMENT> segments({
+	{"local", SEGMENT::LOCAL},
+	{"argument", SEGMENT::ARGUMENT},
+	{"static", SEGMENT::STATIC},
+	{"constant", SEGMENT::CONSTANT},
+	{"this", SEGMENT::THIS},
+	{"that", SEGMENT::THAT},
+	{"temp", SEGMENT::TEMP},
+	{"pointer", SEGMENT::POINTER},
+});
+
+string segmentToString(SEGMENT segment) {
 	switch (segment) {
 	case SEGMENT::LOCAL:
 		return "local";
@@ -51,13 +78,43 @@ string seg_to_string(SEGMENT segment) {
 	case SEGMENT::POINTER:
 		return "pointer";
 	}
+	return "invalid";
 }
 
-unordered_set<string> actions = {"push", "pop"};
-unordered_set<string> segments = {"local", "argument", "static", "constant",
-								  "this",  "that",	   "temp",	 "pointer"};
-unordered_set<string> operations = {"add", "sub", "neg", "eq", "gt",
-									"lt",  "and", "or",	 "not"};
+string actionToString(ACTION action) {
+	switch (action) {
+	case ACTION::ADD:
+		return "add";
+	case ACTION::SUB:
+		return "sub";
+	case ACTION::AND:
+		return "and";
+	case ACTION::EQ:
+		return "eq";
+	case ACTION::GT:
+		return "gt";
+	case ACTION::LT:
+		return "lt";
+	case ACTION::NEG:
+		return "neg";
+	case ACTION::NOT:
+		return "not";
+	case ACTION::OR:
+		return "or";
+	case ACTION::POP:
+		return "pop";
+	case ACTION::PUSH:
+		return "push";
+	}
+	return "invalid";
+}
+
+struct Instruction {
+	ACTION action;
+	SEGMENT segment;
+	int index;
+	int line;
+};
 
 // removes whitespaces from left
 string ltrim(string str);
@@ -70,9 +127,12 @@ string trim(string str);
 // report error
 void reporterror(string filename, int linenum, string msg, string input);
 // handles instruction generation
-vector<string> handleInstruction(vector<string> &instruction);
-// generates CONSTANT segment stack
-vector<string> getConstantAssembly(string i);
+vector<string> handleInstruction(const Instruction &instruction);
+// gets constructed comment for vm command
+string getComment(const Instruction &ins);
+
+vector<string> getPushConstantAssembly(const int i);
+vector<string> getPopLocalAssembly(int i);
 
 int main(int argc, char **argv) {
 
@@ -90,16 +150,15 @@ int main(int argc, char **argv) {
 		return STATUS::COULD_NOT_OPEN_INPUT_FILE;
 	}
 
-	vector<vector<string>> instructions;
-	vector<int> lineNumber;
-	int cnt = 0;
+	vector<Instruction> instructions;
+	Instruction ins;
+	int linecnt = 0;
 	string line;
 	string cleanedline;
-	char delimeter = ' ';
-	bool is_all_digits;
 
 	while (getline(inputfile, line)) {
-		cnt++;
+		linecnt++;
+		ins = {};
 
 		cleanedline = trim(line);
 
@@ -119,25 +178,28 @@ int main(int argc, char **argv) {
 		// Arithmetic / logical command
 		if (instruction.size() == 1) {
 
-			if (operations.find(instruction[0]) == operations.end()) {
-				reporterror(inputfilename, cnt,
+			if (actions.find(instruction[0]) == actions.end()) {
+				reporterror(inputfilename, linecnt,
 							"Invalid arithmetic or logical command",
 							cleanedline);
 				return STATUS::INVALID_OPERATION;
 			}
+			ins.action = actions[instruction[0]];
+			ins.line = linecnt;
 		}
 
 		// push / pop command
 		else if (instruction.size() == 3) {
 
 			if (actions.find(instruction[0]) == actions.end()) {
-				reporterror(inputfilename, cnt, "Invalid action (push or pop)",
-							cleanedline);
+				reporterror(inputfilename, linecnt,
+							"Invalid action (push or pop)", cleanedline);
 				return STATUS::INVALID_ACTION;
 			}
 
 			if (segments.find(instruction[1]) == segments.end()) {
-				reporterror(inputfilename, cnt, "Invalid segment", cleanedline);
+				reporterror(inputfilename, linecnt, "Invalid segment",
+							cleanedline);
 				return STATUS::INVALID_SEGMENT;
 			}
 
@@ -146,37 +208,51 @@ int main(int argc, char **argv) {
 					   [](unsigned char c) { return std::isdigit(c); });
 
 			if (!is_all_digits) {
-				reporterror(inputfilename, cnt, "Not a positive integer",
+				reporterror(inputfilename, linecnt, "Not a positive integer",
 							cleanedline);
 				return STATUS::INVALID_ADDRESS;
 			}
+			ins.action = actions.at(instruction[0]);
+			ins.segment = segments.at(instruction[1]);
+			ins.index = stoi(instruction[2]);
+			ins.line = linecnt;
 		}
 
 		// Anything other than 1 or 3 tokens
 		else {
-			reporterror(inputfilename, cnt, "Invalid instruction format",
+			reporterror(inputfilename, linecnt, "Invalid instruction format",
 						cleanedline);
 			return STATUS::INVALID_INSTR;
 		}
 
-		instructions.push_back(instruction);
-		lineNumber.push_back(cnt);
+		instructions.push_back(ins);
 	}
 
 	// for (auto &ins : instructions) {
-	// 	for (auto &i : ins) {
-	// 		cout << i << " ";
-	// 	}
+	// 	cout << static_cast<int>(ins.action) << " ";
+	// 	cout << static_cast<int>(ins.segment) << " ";
+	// 	cout << static_cast<int>(ins.index) << " ";
+	// 	cout << ins.line << "\n";
 	// 	cout << "\n";
 	// }
 	vector<string> output;
-	for (auto &ins : instructions) {
-		vector<string> temp = handleInstruction(ins);
-		for(auto &i : temp){
-			output.push_back(i);
-		}
-		cout << "\n";
+	vector<string> tempout;
+	for (const auto &ins : instructions) {
+		tempout = handleInstruction(ins);
+		output.insert(output.end(), tempout.begin(), tempout.end());
 	}
+
+	int endPointPos = inputfilename.find_last_of('.');
+	string outputfilename = inputfilename.substr(0, endPointPos) + ".asm";
+	ofstream ofile(outputfilename);
+	if (!ofile) {
+		cerr << "Error opening file\n";
+		return STATUS::COULD_NOT_OPEN_OUTPUT_FILE;
+	}
+	for (auto &out : output) {
+		ofile << out << "\n";
+	}
+	ofile.close();
 
 	return STATUS::SUCCESS;
 }
@@ -204,23 +280,59 @@ void reporterror(string filename, int linenum, string msg, string input) {
 	cout << msg << " [ " << input << " ]\n";
 }
 
-vector<string> handleInstruction(vector<string> &instruction) {
-	if (instruction.size() == 1) {
-
-	} else if (instruction.size() == 3) {
-		string instrcomment = "// "+instruction[0]+" "+instruction[1]+" "+instruction[2];
-		vector<string> res = {instrcomment};
-		vector<string> temp;
-		if (instruction[1] == seg_to_string(SEGMENT::CONSTANT)) {
-			temp = getConstantAssembly(instruction[2]);
+vector<string> handleInstruction(const Instruction &ins) {
+	string instrcomment = getComment(ins);
+	vector<string> res({instrcomment});
+	vector<string> temp;
+	switch (ins.action) {
+	case ACTION::PUSH:
+		switch (ins.segment) {
+		case SEGMENT::CONSTANT:
+			temp = getPushConstantAssembly(ins.index);
+			res.insert(res.end(), temp.begin(), temp.end());
+			return res;
+		}
+	case ACTION::POP:
+		switch (ins.segment) {
+		case SEGMENT::LOCAL:
+			temp = getPopLocalAssembly(ins.index);
 			res.insert(res.end(), temp.begin(), temp.end());
 			return res;
 		}
 	}
+	return {};
 }
 
-vector<string> getConstantAssembly(string i) {
+vector<string> getPushConstantAssembly(const int i) {
 	return {
-		"@" + i, "D=A", "@" + SP, "A=M", "M=D", "@" + SP, "M=M+1",
+		"@" + to_string(i), "D=A", "@SP", "A=M", "M=D", "@SP", "M=M+1",
 	};
+}
+
+vector<string> getPopLocalAssembly(int i) {
+	return {
+		"@" + to_string(i),
+		"D=A",
+		"@LCL",
+		"D=D+M",
+		"@R13",
+		"M=D",
+
+		"@SP",
+		"AM=M-1",
+		"D=M",
+
+		"@R13",
+		"A=M",
+		"M=D",
+	};
+}
+
+string getComment(const Instruction &ins) {
+	if (ins.action == ACTION::PUSH || ins.action == ACTION::POP) {
+		return "// " + actionToString(ins.action) + " " +
+			   segmentToString(ins.segment) + " " + to_string(ins.index);
+	} else {
+		return "// " + actionToString(ins.action);
+	}
 }

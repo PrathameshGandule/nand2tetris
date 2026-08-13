@@ -4,9 +4,11 @@ push constant 21
 		push constant 22
 
 // hello
-pop argumet 2
+pop argument 2
 pop argument 8
+add
+sub
 
 
-push cons 36
+push constant 36
 pop this 8
