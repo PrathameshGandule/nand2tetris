@@ -1,12 +1,10 @@
 @i
 D=A
 @LCL
-D=D+M
-@R13
-M=D
-@SP
-AM=M-1
+A=D+A
 D=M
-@R13
+@SP
 A=M
 M=D
+@SP
+M=M+1

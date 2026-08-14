@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -8,6 +9,7 @@
 using namespace std;
 
 const string WHITESPACE = " \n\r\t\f\v";
+string staticVarName = "";
 
 enum class ACTION { PUSH, POP, ADD, SUB, NEG, EQ, GT, LT, AND, OR, NOT };
 
@@ -109,6 +111,21 @@ string actionToString(ACTION action) {
 	return "invalid";
 }
 
+string segmentBase(SEGMENT segment) {
+	switch (segment) {
+	case SEGMENT::LOCAL:
+		return "LCL";
+	case SEGMENT::ARGUMENT:
+		return "ARG";
+	case SEGMENT::THIS:
+		return "THIS";
+	case SEGMENT::THAT:
+		return "THAT";
+	default:
+		return "";
+	}
+}
+
 struct Instruction {
 	ACTION action;
 	SEGMENT segment;
@@ -127,12 +144,15 @@ string trim(string str);
 // report error
 void reporterror(string filename, int linenum, string msg, string input);
 // handles instruction generation
-vector<string> handleInstruction(const Instruction &instruction);
+vector<string> handleInstruction(const Instruction &instruction, string &error);
 // gets constructed comment for vm command
-string getComment(const Instruction &ins);
+string getInstruction(const Instruction &ins);
 
-vector<string> getPushConstantAssembly(const int i);
-vector<string> getPopLocalAssembly(int i);
+vector<string> getPushConstantAssembly(const Instruction &ins);
+vector<string> getPopGenAssembly(const Instruction &ins);
+vector<string> getPushGenAssembly(const Instruction &ins);
+vector<string> getPopStaticAssembly(const Instruction &ins);
+vector<string> getPushStaticAssembly(const Instruction &ins);
 
 int main(int argc, char **argv) {
 
@@ -149,6 +169,10 @@ int main(int argc, char **argv) {
 		cout << "Couldn't open file named : " << inputfilename << "\n";
 		return STATUS::COULD_NOT_OPEN_INPUT_FILE;
 	}
+
+	int endPointPos = inputfilename.find_last_of("/\\.");
+	staticVarName = inputfilename.substr(0, endPointPos);
+	string outputfilename = inputfilename.substr(0, endPointPos) + ".asm";
 
 	vector<Instruction> instructions;
 	Instruction ins;
@@ -237,13 +261,16 @@ int main(int argc, char **argv) {
 	// }
 	vector<string> output;
 	vector<string> tempout;
+	string error;
 	for (const auto &ins : instructions) {
-		tempout = handleInstruction(ins);
+		tempout = handleInstruction(ins, error);
+		if (error != "") {
+			reporterror(inputfilename, ins.line, error, getInstruction(ins));
+			return STATUS::INVALID_INSTR;
+		}
 		output.insert(output.end(), tempout.begin(), tempout.end());
 	}
 
-	int endPointPos = inputfilename.find_last_of('.');
-	string outputfilename = inputfilename.substr(0, endPointPos) + ".asm";
 	ofstream ofile(outputfilename);
 	if (!ofile) {
 		cerr << "Error opening file\n";
@@ -280,22 +307,36 @@ void reporterror(string filename, int linenum, string msg, string input) {
 	cout << msg << " [ " << input << " ]\n";
 }
 
-vector<string> handleInstruction(const Instruction &ins) {
-	string instrcomment = getComment(ins);
-	vector<string> res({instrcomment});
+vector<string> handleInstruction(const Instruction &ins, string &error) {
+	string instrstr = getInstruction(ins);
+	error = "";
+	vector<string> res({"// " + instrstr});
 	vector<string> temp;
 	switch (ins.action) {
 	case ACTION::PUSH:
 		switch (ins.segment) {
 		case SEGMENT::CONSTANT:
-			temp = getPushConstantAssembly(ins.index);
+			temp = getPushConstantAssembly(ins);
+			res.insert(res.end(), temp.begin(), temp.end());
+			return res;
+		case SEGMENT::LOCAL:
+		case SEGMENT::ARGUMENT:
+		case SEGMENT::THIS:
+		case SEGMENT::THAT:
+			temp = getPushGenAssembly(ins);
 			res.insert(res.end(), temp.begin(), temp.end());
 			return res;
 		}
 	case ACTION::POP:
 		switch (ins.segment) {
+		case SEGMENT::CONSTANT:
+			error = "This operation is not permitted!!!";
+			return {};
 		case SEGMENT::LOCAL:
-			temp = getPopLocalAssembly(ins.index);
+		case SEGMENT::ARGUMENT:
+		case SEGMENT::THIS:
+		case SEGMENT::THAT:
+			temp = getPopGenAssembly(ins);
 			res.insert(res.end(), temp.begin(), temp.end());
 			return res;
 		}
@@ -303,17 +344,17 @@ vector<string> handleInstruction(const Instruction &ins) {
 	return {};
 }
 
-vector<string> getPushConstantAssembly(const int i) {
+vector<string> getPushConstantAssembly(const Instruction &ins) {
 	return {
-		"@" + to_string(i), "D=A", "@SP", "A=M", "M=D", "@SP", "M=M+1",
+		"@" + to_string(ins.index), "D=A", "@SP", "A=M", "M=D", "@SP", "M=M+1",
 	};
 }
 
-vector<string> getPopLocalAssembly(int i) {
+vector<string> getPopGenAssembly(const Instruction &ins) {
 	return {
-		"@" + to_string(i),
+		"@" + to_string(ins.index),
 		"D=A",
-		"@LCL",
+		"@" + segmentBase(ins.segment),
 		"D=D+M",
 		"@R13",
 		"M=D",
@@ -328,11 +369,28 @@ vector<string> getPopLocalAssembly(int i) {
 	};
 }
 
-string getComment(const Instruction &ins) {
+vector<string> getPushLocalAssembly(const Instruction &ins) {
+	return {
+		"@" + to_string(ins.index),
+		"D=A",
+		"@" + segmentBase(ins.segment),
+		"A=D+A",
+		"D=M",
+
+		"@SP",
+		"A=M",
+		"M=D",
+
+		"@SP",
+		"M=M+1",
+	};
+}
+
+string getInstruction(const Instruction &ins) {
 	if (ins.action == ACTION::PUSH || ins.action == ACTION::POP) {
-		return "// " + actionToString(ins.action) + " " +
-			   segmentToString(ins.segment) + " " + to_string(ins.index);
+		return actionToString(ins.action) + " " + segmentToString(ins.segment) +
+			   " " + to_string(ins.index);
 	} else {
-		return "// " + actionToString(ins.action);
+		return actionToString(ins.action);
 	}
 }
