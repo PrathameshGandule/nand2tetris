@@ -1,3 +1,11 @@
-push constant 12
-pop local 5
-push constant 10
+push local 2
+push static 5
+push static 6
+push static 9
+push pointer 1
+pop argument 89
+add
+eq
+eq
+gt
+neg

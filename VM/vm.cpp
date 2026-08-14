@@ -10,6 +10,8 @@ using namespace std;
 
 const string WHITESPACE = " \n\r\t\f\v";
 string staticVarName = "";
+const int TEMPADDRSTART = 5;
+int labelcounter = 0;
 
 enum class ACTION { PUSH, POP, ADD, SUB, NEG, EQ, GT, LT, AND, OR, NOT };
 
@@ -34,6 +36,8 @@ enum STATUS {
 	INVALID_SEGMENT,
 	INVALID_ADDRESS,
 	INVALID_OPERATION,
+	INVALID_TEMP_INDEX,
+	INVALID_POINTER_INDEX,
 };
 
 // unordered_set<string> actions = {"push", "pop"};
@@ -126,11 +130,29 @@ string segmentBase(SEGMENT segment) {
 	}
 }
 
+string compActionBase(ACTION action) {
+	switch (action) {
+	case ACTION::EQ:
+		return "EQ";
+	case ACTION::GT:
+		return "GT";
+	case ACTION::LT:
+		return "LT";
+	default:
+		return "";
+	}
+}
+
 struct Instruction {
 	ACTION action;
 	SEGMENT segment;
 	int index;
 	int line;
+};
+
+struct LabelPair {
+	string truelabel;
+	string endlabel;
 };
 
 // removes whitespaces from left
@@ -147,12 +169,27 @@ void reporterror(string filename, int linenum, string msg, string input);
 vector<string> handleInstruction(const Instruction &instruction, string &error);
 // gets constructed comment for vm command
 string getInstruction(const Instruction &ins);
+// gets next true and end labels according to the counter
+LabelPair getNextLabels(ACTION action);
 
 vector<string> getPushConstantAssembly(const Instruction &ins);
 vector<string> getPopGenAssembly(const Instruction &ins);
 vector<string> getPushGenAssembly(const Instruction &ins);
 vector<string> getPopStaticAssembly(const Instruction &ins);
 vector<string> getPushStaticAssembly(const Instruction &ins);
+vector<string> getPopTempAssembly(const Instruction &ins);
+vector<string> getPushTempAssembly(const Instruction &ins);
+vector<string> getPopPointerAssembly(const Instruction &ins);
+vector<string> getPushPointerAssembly(const Instruction &ins);
+vector<string> getAddAssembly();
+vector<string> getSubAssembly();
+vector<string> getAndAssembly();
+vector<string> getOrAssembly();
+vector<string> getNegAssembly();
+vector<string> getNotAssembly();
+vector<string> getEqAssembly(const Instruction &ins);
+vector<string> getGtAssembly(const Instruction &ins);
+vector<string> getLtAssembly(const Instruction &ins);
 
 int main(int argc, char **argv) {
 
@@ -170,9 +207,14 @@ int main(int argc, char **argv) {
 		return STATUS::COULD_NOT_OPEN_INPUT_FILE;
 	}
 
-	int endPointPos = inputfilename.find_last_of("/\\.");
-	staticVarName = inputfilename.substr(0, endPointPos);
-	string outputfilename = inputfilename.substr(0, endPointPos) + ".asm";
+	size_t slash = inputfilename.find_last_of("/\\");
+	size_t dot = inputfilename.find_last_of('.');
+
+	string filename =
+		inputfilename.substr(slash == string::npos ? 0 : slash + 1,
+							 dot - (slash == string::npos ? 0 : slash + 1));
+
+	staticVarName = filename;
 
 	vector<Instruction> instructions;
 	Instruction ins;
@@ -208,6 +250,14 @@ int main(int argc, char **argv) {
 							cleanedline);
 				return STATUS::INVALID_OPERATION;
 			}
+			ACTION action = actions.at(instruction[0]);
+
+			if (action == ACTION::PUSH || action == ACTION::POP) {
+				reporterror(inputfilename, linecnt,
+							"Push/pop require a segment and index",
+							cleanedline);
+				return STATUS::INVALID_INSTR;
+			}
 			ins.action = actions[instruction[0]];
 			ins.line = linecnt;
 		}
@@ -236,10 +286,46 @@ int main(int argc, char **argv) {
 							cleanedline);
 				return STATUS::INVALID_ADDRESS;
 			}
-			ins.action = actions.at(instruction[0]);
-			ins.segment = segments.at(instruction[1]);
-			ins.index = stoi(instruction[2]);
+
+			// semantic validations
+			ACTION action = actions.at(instruction[0]);
+			SEGMENT segment = segments.at(instruction[1]);
+			int i = stoi(instruction[2]);
+			if (action != ACTION::PUSH && action != ACTION::POP) {
+				reporterror(inputfilename, linecnt,
+							"Invalid Action with segments!!!", cleanedline);
+				return STATUS::INVALID_ACTION;
+			}
+
+			if (action == ACTION::POP && segment == SEGMENT::CONSTANT) {
+				reporterror(inputfilename, linecnt,
+							"Invalid action and segment combination!!!",
+							cleanedline);
+				return STATUS::INVALID_INSTR;
+			}
+
+			if (segment == SEGMENT::TEMP) {
+				if (i < 0 || i > 7) {
+					reporterror(inputfilename, linecnt,
+								"Invalid index for TEMP SEG type (0..7)!!!",
+								cleanedline);
+					return STATUS::INVALID_TEMP_INDEX;
+				}
+			}
+			if (segment == SEGMENT::POINTER) {
+				if (i != 0 && i != 1) {
+					reporterror(
+						inputfilename, linecnt,
+						"Invalid index for POINTER SEG type (0 or 1)!!!",
+						cleanedline);
+					return STATUS::INVALID_POINTER_INDEX;
+				}
+			}
+			ins.action = action;
+			ins.segment = segment;
+			ins.index = i;
 			ins.line = linecnt;
+
 		}
 
 		// Anything other than 1 or 3 tokens
@@ -271,6 +357,7 @@ int main(int argc, char **argv) {
 		output.insert(output.end(), tempout.begin(), tempout.end());
 	}
 
+	string outputfilename = filename + ".asm";
 	ofstream ofile(outputfilename);
 	if (!ofile) {
 		cerr << "Error opening file\n";
@@ -326,11 +413,22 @@ vector<string> handleInstruction(const Instruction &ins, string &error) {
 			temp = getPushGenAssembly(ins);
 			res.insert(res.end(), temp.begin(), temp.end());
 			return res;
+		case SEGMENT::STATIC:
+			temp = getPushStaticAssembly(ins);
+			res.insert(res.end(), temp.begin(), temp.end());
+			return res;
+		case SEGMENT::TEMP:
+			temp = getPushTempAssembly(ins);
+			res.insert(res.end(), temp.begin(), temp.end());
+			return res;
+		case SEGMENT::POINTER:
+			temp = getPushPointerAssembly(ins);
+			res.insert(res.end(), temp.begin(), temp.end());
+			return res;
 		}
 	case ACTION::POP:
 		switch (ins.segment) {
 		case SEGMENT::CONSTANT:
-			error = "This operation is not permitted!!!";
 			return {};
 		case SEGMENT::LOCAL:
 		case SEGMENT::ARGUMENT:
@@ -339,51 +437,61 @@ vector<string> handleInstruction(const Instruction &ins, string &error) {
 			temp = getPopGenAssembly(ins);
 			res.insert(res.end(), temp.begin(), temp.end());
 			return res;
+		case SEGMENT::STATIC:
+			temp = getPopStaticAssembly(ins);
+			res.insert(res.end(), temp.begin(), temp.end());
+			return res;
+		case SEGMENT::TEMP:
+			temp = getPopTempAssembly(ins);
+			res.insert(res.end(), temp.begin(), temp.end());
+			return res;
+		case SEGMENT::POINTER:
+			if (ins.index != 0 && ins.index != 1) {
+				error = "This operation is not permitted (except 0 or 1)!!!";
+				return {};
+			}
+			temp = getPopPointerAssembly(ins);
+			res.insert(res.end(), temp.begin(), temp.end());
+			return res;
 		}
+	case ACTION::ADD:
+		temp = getAddAssembly();
+		res.insert(res.end(), temp.begin(), temp.end());
+		return res;
+	case ACTION::SUB:
+		temp = getSubAssembly();
+		res.insert(res.end(), temp.begin(), temp.end());
+		return res;
+	case ACTION::AND:
+		temp = getAndAssembly();
+		res.insert(res.end(), temp.begin(), temp.end());
+		return res;
+	case ACTION::OR:
+		temp = getOrAssembly();
+		res.insert(res.end(), temp.begin(), temp.end());
+		return res;
+	case ACTION::NEG:
+		temp = getNegAssembly();
+		res.insert(res.end(), temp.begin(), temp.end());
+		return res;
+	case ACTION::NOT:
+		temp = getNotAssembly();
+		res.insert(res.end(), temp.begin(), temp.end());
+		return res;
+	case ACTION::EQ:
+		temp = getEqAssembly(ins);
+		res.insert(res.end(), temp.begin(), temp.end());
+		return res;
+	case ACTION::GT:
+		temp = getGtAssembly(ins);
+		res.insert(res.end(), temp.begin(), temp.end());
+		return res;
+	case ACTION::LT:
+		temp = getLtAssembly(ins);
+		res.insert(res.end(), temp.begin(), temp.end());
+		return res;
 	}
 	return {};
-}
-
-vector<string> getPushConstantAssembly(const Instruction &ins) {
-	return {
-		"@" + to_string(ins.index), "D=A", "@SP", "A=M", "M=D", "@SP", "M=M+1",
-	};
-}
-
-vector<string> getPopGenAssembly(const Instruction &ins) {
-	return {
-		"@" + to_string(ins.index),
-		"D=A",
-		"@" + segmentBase(ins.segment),
-		"D=D+M",
-		"@R13",
-		"M=D",
-
-		"@SP",
-		"AM=M-1",
-		"D=M",
-
-		"@R13",
-		"A=M",
-		"M=D",
-	};
-}
-
-vector<string> getPushLocalAssembly(const Instruction &ins) {
-	return {
-		"@" + to_string(ins.index),
-		"D=A",
-		"@" + segmentBase(ins.segment),
-		"A=D+A",
-		"D=M",
-
-		"@SP",
-		"A=M",
-		"M=D",
-
-		"@SP",
-		"M=M+1",
-	};
 }
 
 string getInstruction(const Instruction &ins) {
@@ -393,4 +501,168 @@ string getInstruction(const Instruction &ins) {
 	} else {
 		return actionToString(ins.action);
 	}
+}
+
+LabelPair getNextLabels(ACTION action) {
+	string truelabel =
+		compActionBase(action) + "_TRUE_" + to_string(labelcounter);
+	string endlabel =
+		compActionBase(action) + "_END_" + to_string(labelcounter);
+	labelcounter++;
+	return {truelabel, endlabel};
+}
+
+vector<string> getPushConstantAssembly(const Instruction &ins) {
+	return {
+		"@" + to_string(ins.index), "D=A", "@SP", "A=M", "M=D", "@SP", "M=M+1",
+	};
+}
+
+vector<string> getPopGenAssembly(const Instruction &ins) {
+	return {"@" + to_string(ins.index),
+			"D=A",
+			"@" + segmentBase(ins.segment),
+			"D=D+M",
+			"@R13",
+			"M=D",
+
+			"@SP",
+			"AM=M-1",
+			"D=M",
+
+			"@R13",
+			"A=M",
+			"M=D"};
+}
+
+vector<string> getPushGenAssembly(const Instruction &ins) {
+	return {"@" + to_string(ins.index),
+			"D=A",
+			"@" + segmentBase(ins.segment),
+			"A=D+A",
+			"D=M",
+
+			"@SP",
+			"A=M",
+			"M=D",
+
+			"@SP",
+			"M=M+1"};
+}
+
+vector<string> getPopStaticAssembly(const Instruction &ins) {
+	string staticvar = staticVarName + "." + to_string(ins.index);
+	return {"@SP", "AM=M-1", "D=M", "@" + staticvar, "M=D"};
+}
+vector<string> getPushStaticAssembly(const Instruction &ins) {
+	string staticvar = staticVarName + "." + to_string(ins.index);
+	return {"@" + staticvar, "D=M", "@SP", "A=M", "M=D", "@SP", "M=M+1"};
+}
+
+vector<string> getPopTempAssembly(const Instruction &ins) {
+	return {"@SP", "AM=M-1", "D=M", "@" + to_string(TEMPADDRSTART + ins.index),
+			"M=D"};
+}
+vector<string> getPushTempAssembly(const Instruction &ins) {
+	return {"@" + to_string(TEMPADDRSTART + ins.index),
+			"D=M",
+			"@SP",
+			"A=M",
+			"M=D",
+			"@SP",
+			"M=M+1"};
+}
+
+vector<string> getPopPointerAssembly(const Instruction &ins) {
+	string choice = ins.index == 0	 ? segmentBase(SEGMENT::THIS)
+					: ins.index == 1 ? segmentBase(SEGMENT::THAT)
+									 : "";
+	return {"@SP", "AM=M-1", "D=M", "@" + choice, "M=D"};
+}
+vector<string> getPushPointerAssembly(const Instruction &ins) {
+	string choice = ins.index == 0	 ? segmentBase(SEGMENT::THIS)
+					: ins.index == 1 ? segmentBase(SEGMENT::THAT)
+									 : "";
+	return {"@" + choice, "D=M", "@SP", "A=M", "M=D", "@SP", "M=M+1"};
+}
+
+vector<string> getAddAssembly() {
+	return {"@SP", "AM=M-1", "D=M", "A=A-1", "M=D+M"};
+}
+vector<string> getSubAssembly() {
+	return {"@SP", "AM=M-1", "D=M", "A=A-1", "M=M-D"};
+}
+vector<string> getAndAssembly() {
+	return {"@SP", "AM=M-1", "D=M", "A=A-1", "M=D&M"};
+}
+vector<string> getOrAssembly() {
+	return {"@SP", "AM=M-1", "D=M", "A=A-1", "M=D|M"};
+}
+vector<string> getNegAssembly() { return {"@SP", "A=M-1", "M=-M"}; }
+vector<string> getNotAssembly() { return {"@SP", "A=M-1", "M=!M"}; }
+vector<string> getEqAssembly(const Instruction &ins) {
+	LabelPair labels = getNextLabels(ins.action);
+	return {
+		"@SP",
+		"AM=M-1",
+		"D=M",
+		"A=A-1",
+		"D=M-D",
+		"@" + labels.truelabel,
+		"D;JEQ",
+		"@SP",
+		"A=M-1",
+		"M=0",
+		"@" + labels.endlabel,
+		"0;JMP",
+		"(" + labels.truelabel + ")",
+		"@SP",
+		"A=M-1",
+		"M=-1",
+		"(" + labels.endlabel + ")",
+	};
+}
+vector<string> getLtAssembly(const Instruction &ins) {
+	LabelPair labels = getNextLabels(ins.action);
+	return {
+		"@SP",
+		"AM=M-1",
+		"D=M",
+		"A=A-1",
+		"D=M-D",
+		"@" + labels.truelabel,
+		"D;JLT",
+		"@SP",
+		"A=M-1",
+		"M=0",
+		"@" + labels.endlabel,
+		"0;JMP",
+		"(" + labels.truelabel + ")",
+		"@SP",
+		"A=M-1",
+		"M=-1",
+		"(" + labels.endlabel + ")",
+	};
+}
+vector<string> getGtAssembly(const Instruction &ins) {
+	LabelPair labels = getNextLabels(ins.action);
+	return {
+		"@SP",
+		"AM=M-1",
+		"D=M",
+		"A=A-1",
+		"D=M-D",
+		"@" + labels.truelabel,
+		"D;JGT",
+		"@SP",
+		"A=M-1",
+		"M=0",
+		"@" + labels.endlabel,
+		"0;JMP",
+		"(" + labels.truelabel + ")",
+		"@SP",
+		"A=M-1",
+		"M=-1",
+		"(" + labels.endlabel + ")",
+	};
 }

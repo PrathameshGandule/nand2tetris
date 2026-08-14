@@ -1,31 +1,123 @@
 # VM Translator
 
-A C++ implementation of the **VM Translator** from the [Nand2Tetris](https://www.nand2tetris.org/) project.
+A C++ implementation of the **Virtual Machine Translator** from the [Nand2Tetris](https://www.nand2tetris.org/) course.
 
-## Overview
+The translator reads a `.vm` file containing stack-based VM commands and generates the corresponding **Hack assembly (`.asm`) code**.
 
-The translator will read a `.vm` file, parse and validate VM commands, and generate the corresponding **Hack assembly (`.asm`) code**.
+## Features
 
-It will eventually support:
+Currently supports the complete **Project 7** VM command set:
 
-* Stack operations: `push` and `pop`
-* Arithmetic and logical commands: `add`, `sub`, `neg`, `eq`, `gt`, `lt`, `and`, `or`, `not`
-* Memory segments: `local`, `argument`, `static`, `constant`, `this`, `that`, `temp`, and `pointer`
-* Program flow commands: `label`, `goto`, and `if-goto`
-* Function commands: `function`, `call`, and `return`
-* VM input validation and useful error reporting
-* Generation of valid Hack assembly output
+### Memory Access
 
-The implementation is structured around parsing VM instructions into an internal representation and then translating them into assembly instructions.
+* `push constant i`
+* `push/pop local i`
+* `push/pop argument i`
+* `push/pop this i`
+* `push/pop that i`
+* `push/pop static i`
+* `push/pop temp i`
+* `push/pop pointer i`
+
+### Arithmetic & Logical Commands
+
+* `add`
+* `sub`
+* `neg`
+* `eq`
+* `gt`
+* `lt`
+* `and`
+* `or`
+* `not`
+
+The translator also performs input validation for invalid commands, segments, indices, and unsupported command/segment combinations.
+
+## Architecture
+
+The translator is divided into a few simple stages:
+
+```text
+VM source file
+      │
+      ▼
+Remove comments & whitespace
+      │
+      ▼
+Tokenization
+      │
+      ▼
+Validation
+      │
+      ▼
+Instruction representation
+      │
+      ▼
+Assembly generation
+      │
+      ▼
+Hack .asm file
+```
+
+VM instructions are represented internally using typed enums and an `Instruction` structure rather than being passed around as raw strings.
+
+```cpp
+struct Instruction {
+    ACTION action;
+    SEGMENT segment;
+    int index;
+    int line;
+};
+```
+
+Assembly generation is handled by individual functions for different VM operations and memory segments.
+
+## Static Variables
+
+Static variables are represented using the VM filename:
+
+```text
+push static 0
+```
+
+from:
+
+```text
+Foo.vm
+```
+
+generates assembly referencing:
+
+```asm
+@Foo.0
+```
+
+The Hack assembler then assigns the corresponding symbol to a RAM location.
 
 ## Usage
 
+Compile:
+
 ```bash
-./vm <input.vm>
+g++ vm.cpp -o vm
 ```
 
-The generated assembly will be written to the corresponding `.asm` output file.
+Run:
 
-## Project
+```bash
+./vm Program.vm
+```
 
-Part of the **Nand2Tetris** course, implementing the virtual machine layer that translates the stack-based VM language into Hack assembly.
+This generates:
+
+```text
+Program.asm
+```
+
+The generated assembly can then be assembled and executed using the **Nand2Tetris Hack platform tools**.
+
+## Project Context
+
+This project implements the **VM Translator stage of Nand2Tetris Project 7**, bridging the gap between the stack-based Virtual Machine language and the Hack assembly language.
+
+The implementation focuses on keeping parsing, validation, and assembly generation separate so that individual VM commands can be translated and tested independently.
