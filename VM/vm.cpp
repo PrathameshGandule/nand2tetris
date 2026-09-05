@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <fstream>
 #include <iostream>
-#include <memory>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -13,7 +12,22 @@ string staticVarName = "";
 const int TEMPADDRSTART = 5;
 int labelcounter = 0;
 
-enum class ACTION { PUSH, POP, ADD, SUB, NEG, EQ, GT, LT, AND, OR, NOT };
+enum class ACTION {
+	PUSH,
+	POP,
+	ADD,
+	SUB,
+	NEG,
+	EQ,
+	GT,
+	LT,
+	AND,
+	OR,
+	NOT,
+	LABEL,
+	GOTO,
+	IFGOTO
+};
 
 enum class SEGMENT {
 	LOCAL,
@@ -38,22 +52,24 @@ enum STATUS {
 	INVALID_OPERATION,
 	INVALID_TEMP_INDEX,
 	INVALID_POINTER_INDEX,
+	INVALID_LABEL
 };
 
 // unordered_set<string> actions = {"push", "pop"};
-unordered_map<string, ACTION> actions({
-	{"push", ACTION::PUSH},
-	{"pop", ACTION::POP},
-	{"add", ACTION::ADD},
-	{"sub", ACTION::SUB},
-	{"neg", ACTION::NEG},
-	{"eq", ACTION::EQ},
-	{"gt", ACTION::GT},
-	{"lt", ACTION::LT},
-	{"and", ACTION::AND},
-	{"or", ACTION::OR},
-	{"not", ACTION::NOT},
-});
+unordered_map<string, ACTION> actions({{"push", ACTION::PUSH},
+									   {"pop", ACTION::POP},
+									   {"add", ACTION::ADD},
+									   {"sub", ACTION::SUB},
+									   {"neg", ACTION::NEG},
+									   {"eq", ACTION::EQ},
+									   {"gt", ACTION::GT},
+									   {"lt", ACTION::LT},
+									   {"and", ACTION::AND},
+									   {"or", ACTION::OR},
+									   {"not", ACTION::NOT},
+									   {"label", ACTION::LABEL},
+									   {"goto", ACTION::GOTO},
+									   {"if-goto", ACTION::IFGOTO}});
 unordered_map<string, SEGMENT> segments({
 	{"local", SEGMENT::LOCAL},
 	{"argument", SEGMENT::ARGUMENT},
@@ -111,6 +127,12 @@ string actionToString(ACTION action) {
 		return "pop";
 	case ACTION::PUSH:
 		return "push";
+	case ACTION::LABEL:
+		return "label";
+	case ACTION::GOTO:
+		return "goto";
+	case ACTION::IFGOTO:
+		return "if-goto";
 	}
 	return "invalid";
 }
@@ -146,13 +168,14 @@ string compActionBase(ACTION action) {
 struct Instruction {
 	ACTION action;
 	SEGMENT segment;
+	string label;
 	int index;
 	int line;
 };
 
-struct LabelPair {
-	string truelabel;
-	string endlabel;
+struct SymbolPair {
+	string truesymbol;
+	string endsymbol;
 };
 
 // removes whitespaces from left
@@ -165,12 +188,14 @@ string removeComment(string str);
 string trim(string str);
 // report error
 void reporterror(string filename, int linenum, string msg, string input);
+// checks if label provided is valid
+bool isValidLabel(const std::string &label);
 // handles instruction generation
 vector<string> handleInstruction(const Instruction &instruction, string &error);
 // gets constructed comment for vm command
 string getInstruction(const Instruction &ins);
-// gets next true and end labels according to the counter
-LabelPair getNextLabels(ACTION action);
+// gets next true and end symbols according to the counter
+SymbolPair getNextSymbols(ACTION action);
 
 vector<string> getPushConstantAssembly(const Instruction &ins);
 vector<string> getPopGenAssembly(const Instruction &ins);
@@ -190,6 +215,9 @@ vector<string> getNotAssembly();
 vector<string> getEqAssembly(const Instruction &ins);
 vector<string> getGtAssembly(const Instruction &ins);
 vector<string> getLtAssembly(const Instruction &ins);
+vector<string> getLabelAssembly(const Instruction &ins);
+vector<string> getGotoAssembly(const Instruction &ins);
+vector<string> getIfGotoAssembly(const Instruction &ins);
 
 int main(int argc, char **argv) {
 
@@ -258,7 +286,31 @@ int main(int argc, char **argv) {
 							cleanedline);
 				return STATUS::INVALID_INSTR;
 			}
-			ins.action = actions[instruction[0]];
+			ins.action = action;
+			ins.line = linecnt;
+		}
+
+		else if (instruction.size() == 2) {
+			if (actions.find(instruction[0]) == actions.end()) {
+				reporterror(inputfilename, linecnt, "Invalid branching command",
+							cleanedline);
+				return STATUS::INVALID_OPERATION;
+			}
+			ACTION action = actions.at(instruction[0]);
+			if (action != ACTION::LABEL && action != ACTION::GOTO &&
+				action != ACTION::IFGOTO) {
+				reporterror(inputfilename, linecnt, "Invalid branching command",
+							cleanedline);
+				return STATUS::INVALID_OPERATION;
+			}
+			string label = instruction[1];
+			if (!isValidLabel(label)) {
+				reporterror(inputfilename, linecnt, "Invalid label",
+							cleanedline);
+				return STATUS::INVALID_LABEL;
+			}
+			ins.action = action;
+			ins.label = label;
 			ins.line = linecnt;
 		}
 
@@ -394,6 +446,36 @@ void reporterror(string filename, int linenum, string msg, string input) {
 	cout << msg << " [ " << input << " ]\n";
 }
 
+/**
+ * Validates if a string is a valid VM label/Hack symbol.
+ * Rules:
+ *  - Must not be empty.
+ *  - Valid chars: A-Z, a-z, 0-9, '.', '_', ':', '$'
+ *  - Cannot start with a digit (0-9).
+ */
+bool isValidLabel(const std::string &label) {
+	if (label.empty()) {
+		return false;
+	}
+
+	// First character check: cannot be a digit
+	char first = label[0];
+	if (std::isdigit(static_cast<unsigned char>(first))) {
+		return false;
+	}
+
+	// Character set check
+	for (char ch : label) {
+		bool isValidChar = std::isalnum(static_cast<unsigned char>(ch)) ||
+						   ch == '.' || ch == '_' || ch == ':' || ch == '$';
+		if (!isValidChar) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 vector<string> handleInstruction(const Instruction &ins, string &error) {
 	string instrstr = getInstruction(ins);
 	error = "";
@@ -404,112 +486,106 @@ vector<string> handleInstruction(const Instruction &ins, string &error) {
 		switch (ins.segment) {
 		case SEGMENT::CONSTANT:
 			temp = getPushConstantAssembly(ins);
-			res.insert(res.end(), temp.begin(), temp.end());
-			return res;
+			break;
 		case SEGMENT::LOCAL:
 		case SEGMENT::ARGUMENT:
 		case SEGMENT::THIS:
 		case SEGMENT::THAT:
 			temp = getPushGenAssembly(ins);
-			res.insert(res.end(), temp.begin(), temp.end());
-			return res;
+			break;
 		case SEGMENT::STATIC:
 			temp = getPushStaticAssembly(ins);
-			res.insert(res.end(), temp.begin(), temp.end());
-			return res;
+			break;
 		case SEGMENT::TEMP:
 			temp = getPushTempAssembly(ins);
-			res.insert(res.end(), temp.begin(), temp.end());
-			return res;
+			break;
 		case SEGMENT::POINTER:
 			temp = getPushPointerAssembly(ins);
-			res.insert(res.end(), temp.begin(), temp.end());
-			return res;
+			break;
 		}
+		break;
 	case ACTION::POP:
 		switch (ins.segment) {
 		case SEGMENT::CONSTANT:
-			return {};
+			temp = {};
+			break;
 		case SEGMENT::LOCAL:
 		case SEGMENT::ARGUMENT:
 		case SEGMENT::THIS:
 		case SEGMENT::THAT:
 			temp = getPopGenAssembly(ins);
-			res.insert(res.end(), temp.begin(), temp.end());
-			return res;
+			break;
 		case SEGMENT::STATIC:
 			temp = getPopStaticAssembly(ins);
-			res.insert(res.end(), temp.begin(), temp.end());
-			return res;
+			break;
 		case SEGMENT::TEMP:
 			temp = getPopTempAssembly(ins);
-			res.insert(res.end(), temp.begin(), temp.end());
-			return res;
+			break;
 		case SEGMENT::POINTER:
-			if (ins.index != 0 && ins.index != 1) {
-				error = "This operation is not permitted (except 0 or 1)!!!";
-				return {};
-			}
 			temp = getPopPointerAssembly(ins);
-			res.insert(res.end(), temp.begin(), temp.end());
-			return res;
+			break;
 		}
+		break;
 	case ACTION::ADD:
 		temp = getAddAssembly();
-		res.insert(res.end(), temp.begin(), temp.end());
-		return res;
+		break;
 	case ACTION::SUB:
 		temp = getSubAssembly();
-		res.insert(res.end(), temp.begin(), temp.end());
-		return res;
+		break;
 	case ACTION::AND:
 		temp = getAndAssembly();
-		res.insert(res.end(), temp.begin(), temp.end());
-		return res;
+		break;
 	case ACTION::OR:
 		temp = getOrAssembly();
-		res.insert(res.end(), temp.begin(), temp.end());
-		return res;
+		break;
 	case ACTION::NEG:
 		temp = getNegAssembly();
-		res.insert(res.end(), temp.begin(), temp.end());
-		return res;
+		break;
 	case ACTION::NOT:
 		temp = getNotAssembly();
-		res.insert(res.end(), temp.begin(), temp.end());
-		return res;
+		break;
 	case ACTION::EQ:
 		temp = getEqAssembly(ins);
-		res.insert(res.end(), temp.begin(), temp.end());
-		return res;
+		break;
 	case ACTION::GT:
 		temp = getGtAssembly(ins);
-		res.insert(res.end(), temp.begin(), temp.end());
-		return res;
+		break;
 	case ACTION::LT:
 		temp = getLtAssembly(ins);
-		res.insert(res.end(), temp.begin(), temp.end());
-		return res;
+		break;
+	case ACTION::LABEL:
+		temp = getLabelAssembly(ins);
+		break;
+	case ACTION::GOTO:
+		temp = getGotoAssembly(ins);
+		break;
+	case ACTION::IFGOTO:
+		temp = getIfGotoAssembly(ins);
+		break;
 	}
-	return {};
+	res.insert(res.end(), temp.begin(), temp.end());
+	return res;
 }
 
 string getInstruction(const Instruction &ins) {
 	if (ins.action == ACTION::PUSH || ins.action == ACTION::POP) {
 		return actionToString(ins.action) + " " + segmentToString(ins.segment) +
 			   " " + to_string(ins.index);
+	} else if (ins.action == ACTION::LABEL || ins.action == ACTION::GOTO ||
+			   ins.action == ACTION::IFGOTO) {
+		return actionToString(ins.action) + " " + ins.label;
 	} else {
 		return actionToString(ins.action);
 	}
 }
 
-LabelPair getNextLabels(ACTION action) {
-	string truelabel =
-		compActionBase(action) + "_TRUE_" + to_string(labelcounter);
-	string endlabel =
-		compActionBase(action) + "_END_" + to_string(labelcounter);
+SymbolPair getNextSymbols(ACTION action) {
+	string truesymbol =
+		"_"+staticVarName+"_"+compActionBase(action) + "_TRUE_" + to_string(labelcounter);
+	string endsymbol =
+		"_"+staticVarName+"_"+compActionBase(action) + "_END_" + to_string(labelcounter);
 	labelcounter++;
-	return {truelabel, endlabel};
+	return {truesymbol, endsymbol};
 }
 
 vector<string> getPushConstantAssembly(const Instruction &ins) {
@@ -555,7 +631,7 @@ vector<string> getPopStaticAssembly(const Instruction &ins) {
 	return {"@SP", "AM=M-1", "D=M", "@" + staticvar, "M=D"};
 }
 vector<string> getPushStaticAssembly(const Instruction &ins) {
-	string staticvar = staticVarName + "." + to_string(ins.index);
+	string staticvar = "_"+staticVarName + "." + to_string(ins.index);
 	return {"@" + staticvar, "D=M", "@SP", "A=M", "M=D", "@SP", "M=M+1"};
 }
 
@@ -601,68 +677,79 @@ vector<string> getOrAssembly() {
 vector<string> getNegAssembly() { return {"@SP", "A=M-1", "M=-M"}; }
 vector<string> getNotAssembly() { return {"@SP", "A=M-1", "M=!M"}; }
 vector<string> getEqAssembly(const Instruction &ins) {
-	LabelPair labels = getNextLabels(ins.action);
+	SymbolPair symbols = getNextSymbols(ins.action);
 	return {
 		"@SP",
 		"AM=M-1",
 		"D=M",
 		"A=A-1",
 		"D=M-D",
-		"@" + labels.truelabel,
+		"@" + symbols.truesymbol,
 		"D;JEQ",
 		"@SP",
 		"A=M-1",
 		"M=0",
-		"@" + labels.endlabel,
+		"@" + symbols.endsymbol,
 		"0;JMP",
-		"(" + labels.truelabel + ")",
+		"(" + symbols.truesymbol + ")",
 		"@SP",
 		"A=M-1",
 		"M=-1",
-		"(" + labels.endlabel + ")",
+		"(" + symbols.endsymbol + ")",
 	};
 }
 vector<string> getLtAssembly(const Instruction &ins) {
-	LabelPair labels = getNextLabels(ins.action);
+	SymbolPair symbols = getNextSymbols(ins.action);
 	return {
 		"@SP",
 		"AM=M-1",
 		"D=M",
 		"A=A-1",
 		"D=M-D",
-		"@" + labels.truelabel,
+		"@" + symbols.truesymbol,
 		"D;JLT",
 		"@SP",
 		"A=M-1",
 		"M=0",
-		"@" + labels.endlabel,
+		"@" + symbols.endsymbol,
 		"0;JMP",
-		"(" + labels.truelabel + ")",
+		"(" + symbols.truesymbol + ")",
 		"@SP",
 		"A=M-1",
 		"M=-1",
-		"(" + labels.endlabel + ")",
+		"(" + symbols.endsymbol + ")",
 	};
 }
 vector<string> getGtAssembly(const Instruction &ins) {
-	LabelPair labels = getNextLabels(ins.action);
+	SymbolPair symbols = getNextSymbols(ins.action);
 	return {
 		"@SP",
 		"AM=M-1",
 		"D=M",
 		"A=A-1",
 		"D=M-D",
-		"@" + labels.truelabel,
+		"@" + symbols.truesymbol,
 		"D;JGT",
 		"@SP",
 		"A=M-1",
 		"M=0",
-		"@" + labels.endlabel,
+		"@" + symbols.endsymbol,
 		"0;JMP",
-		"(" + labels.truelabel + ")",
+		"(" + symbols.truesymbol + ")",
 		"@SP",
 		"A=M-1",
 		"M=-1",
-		"(" + labels.endlabel + ")",
+		"(" + symbols.endsymbol + ")",
 	};
+}
+
+vector<string> getLabelAssembly(const Instruction &ins) {
+	return {"(" + ins.label + ")"};
+}
+
+vector<string> getGotoAssembly(const Instruction &ins) {
+	return {"@" + ins.label, "0;JMP"};
+}
+vector<string> getIfGotoAssembly(const Instruction &ins) {
+	return {"@SP", "AM=M-1", "D=M", "@" + ins.label, "D;JNE"};
 }

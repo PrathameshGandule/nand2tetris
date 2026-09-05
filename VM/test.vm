@@ -9,3 +9,8 @@ eq
 eq
 gt
 neg
+label LOOP
+goto LOOP
+push static 8
+if-goto LOOP
+push constant 5
