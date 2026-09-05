@@ -212,9 +212,7 @@ vector<string> getAndAssembly();
 vector<string> getOrAssembly();
 vector<string> getNegAssembly();
 vector<string> getNotAssembly();
-vector<string> getEqAssembly(const Instruction &ins);
-vector<string> getGtAssembly(const Instruction &ins);
-vector<string> getLtAssembly(const Instruction &ins);
+vector<string> getCompGenAssembly(const Instruction &ins);
 vector<string> getLabelAssembly(const Instruction &ins);
 vector<string> getGotoAssembly(const Instruction &ins);
 vector<string> getIfGotoAssembly(const Instruction &ins);
@@ -545,13 +543,9 @@ vector<string> handleInstruction(const Instruction &ins, string &error) {
 		temp = getNotAssembly();
 		break;
 	case ACTION::EQ:
-		temp = getEqAssembly(ins);
-		break;
 	case ACTION::GT:
-		temp = getGtAssembly(ins);
-		break;
 	case ACTION::LT:
-		temp = getLtAssembly(ins);
+		temp = getCompGenAssembly(ins);
 		break;
 	case ACTION::LABEL:
 		temp = getLabelAssembly(ins);
@@ -580,10 +574,10 @@ string getInstruction(const Instruction &ins) {
 }
 
 SymbolPair getNextSymbols(ACTION action) {
-	string truesymbol =
-		"_"+staticVarName+"_"+compActionBase(action) + "_TRUE_" + to_string(labelcounter);
-	string endsymbol =
-		"_"+staticVarName+"_"+compActionBase(action) + "_END_" + to_string(labelcounter);
+	string truesymbol = "_" + staticVarName + "_" + compActionBase(action) +
+						"_TRUE_" + to_string(labelcounter);
+	string endsymbol = "_" + staticVarName + "_" + compActionBase(action) +
+					   "_END_" + to_string(labelcounter);
 	labelcounter++;
 	return {truesymbol, endsymbol};
 }
@@ -631,7 +625,7 @@ vector<string> getPopStaticAssembly(const Instruction &ins) {
 	return {"@SP", "AM=M-1", "D=M", "@" + staticvar, "M=D"};
 }
 vector<string> getPushStaticAssembly(const Instruction &ins) {
-	string staticvar = "_"+staticVarName + "." + to_string(ins.index);
+	string staticvar = "_" + staticVarName + "." + to_string(ins.index);
 	return {"@" + staticvar, "D=M", "@SP", "A=M", "M=D", "@SP", "M=M+1"};
 }
 
@@ -675,8 +669,10 @@ vector<string> getOrAssembly() {
 	return {"@SP", "AM=M-1", "D=M", "A=A-1", "M=D|M"};
 }
 vector<string> getNegAssembly() { return {"@SP", "A=M-1", "M=-M"}; }
+
 vector<string> getNotAssembly() { return {"@SP", "A=M-1", "M=!M"}; }
-vector<string> getEqAssembly(const Instruction &ins) {
+
+vector<string> getCompGenAssembly(const Instruction &ins) {
 	SymbolPair symbols = getNextSymbols(ins.action);
 	return {
 		"@SP",
@@ -685,51 +681,7 @@ vector<string> getEqAssembly(const Instruction &ins) {
 		"A=A-1",
 		"D=M-D",
 		"@" + symbols.truesymbol,
-		"D;JEQ",
-		"@SP",
-		"A=M-1",
-		"M=0",
-		"@" + symbols.endsymbol,
-		"0;JMP",
-		"(" + symbols.truesymbol + ")",
-		"@SP",
-		"A=M-1",
-		"M=-1",
-		"(" + symbols.endsymbol + ")",
-	};
-}
-vector<string> getLtAssembly(const Instruction &ins) {
-	SymbolPair symbols = getNextSymbols(ins.action);
-	return {
-		"@SP",
-		"AM=M-1",
-		"D=M",
-		"A=A-1",
-		"D=M-D",
-		"@" + symbols.truesymbol,
-		"D;JLT",
-		"@SP",
-		"A=M-1",
-		"M=0",
-		"@" + symbols.endsymbol,
-		"0;JMP",
-		"(" + symbols.truesymbol + ")",
-		"@SP",
-		"A=M-1",
-		"M=-1",
-		"(" + symbols.endsymbol + ")",
-	};
-}
-vector<string> getGtAssembly(const Instruction &ins) {
-	SymbolPair symbols = getNextSymbols(ins.action);
-	return {
-		"@SP",
-		"AM=M-1",
-		"D=M",
-		"A=A-1",
-		"D=M-D",
-		"@" + symbols.truesymbol,
-		"D;JGT",
+		"D;J" + compActionBase(ins.action),
 		"@SP",
 		"A=M-1",
 		"M=0",
