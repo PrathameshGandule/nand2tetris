@@ -1,16 +1,27 @@
-push local 2
-push static 5
-push static 6
-push static 9
-push pointer 1
-pop argument 89
-add
-eq
-eq
-gt
-neg
 label LOOP
 goto LOOP
-push static 8
-if-goto LOOP
-push constant 5
+push constant 2
+push constant 3
+call mult 2
+function mult 2
+	push constant 0
+	pop local 0
+	push constant 1
+	pop local 1
+label LOOP
+	push local 1
+	push argument 1
+	gt
+	if-goto END
+	push local 0
+	push argument 0
+	add
+	pop local 0
+	push local 1
+	push constant 1
+	add
+	pop local 1
+	goto LOOP
+label END
+	push local 0
+	return

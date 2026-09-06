@@ -1,39 +1,53 @@
-// push local 2
+// label LOOP
+($LOOP)
+// goto LOOP
+@$LOOP
+0;JMP
+// push constant 2
 @2
 D=A
+@SP
+A=M
+M=D
+@SP
+M=M+1
+// push constant 3
+@3
+D=A
+@SP
+A=M
+M=D
+@SP
+M=M+1
+// call mult 2
+@__VM_RETURN_0
+D=A
+@SP
+A=M
+M=D
+@SP
+M=M+1
 @LCL
-A=D+A
 D=M
 @SP
 A=M
 M=D
 @SP
 M=M+1
-// push static 5
-@_test.5
+@ARG
 D=M
 @SP
 A=M
 M=D
 @SP
 M=M+1
-// push static 6
-@_test.6
+@THIS
 D=M
 @SP
 A=M
 M=D
 @SP
 M=M+1
-// push static 9
-@_test.9
-D=M
-@SP
-A=M
-M=D
-@SP
-M=M+1
-// push pointer 1
 @THAT
 D=M
 @SP
@@ -41,10 +55,45 @@ A=M
 M=D
 @SP
 M=M+1
-// pop argument 89
-@89
-D=A
+@SP
+D=M
+@5
+D=D-A
+@2
+D=D-A
 @ARG
+M=D
+@SP
+D=M
+@LCL
+M=D
+@mult
+0;JMP
+(__VM_RETURN_0)
+// function mult 2
+(mult)
+@SP
+A=M
+M=0
+@SP
+M=M+1
+@SP
+A=M
+M=0
+@SP
+M=M+1
+// push constant 0
+@0
+D=A
+@SP
+A=M
+M=D
+@SP
+M=M+1
+// pop local 0
+@0
+D=A
+@LCL
 D=D+M
 @R13
 M=D
@@ -54,94 +103,210 @@ D=M
 @R13
 A=M
 M=D
-// add
-@SP
-AM=M-1
-D=M
-A=A-1
-M=D+M
-// eq
-@SP
-AM=M-1
-D=M
-A=A-1
-D=M-D
-@_test_EQ_TRUE_0
-D;JEQ
-@SP
-A=M-1
-M=0
-@_test_EQ_END_0
-0;JMP
-(_test_EQ_TRUE_0)
-@SP
-A=M-1
-M=-1
-(_test_EQ_END_0)
-// eq
-@SP
-AM=M-1
-D=M
-A=A-1
-D=M-D
-@_test_EQ_TRUE_1
-D;JEQ
-@SP
-A=M-1
-M=0
-@_test_EQ_END_1
-0;JMP
-(_test_EQ_TRUE_1)
-@SP
-A=M-1
-M=-1
-(_test_EQ_END_1)
-// gt
-@SP
-AM=M-1
-D=M
-A=A-1
-D=M-D
-@_test_GT_TRUE_2
-D;JGT
-@SP
-A=M-1
-M=0
-@_test_GT_END_2
-0;JMP
-(_test_GT_TRUE_2)
-@SP
-A=M-1
-M=-1
-(_test_GT_END_2)
-// neg
-@SP
-A=M-1
-M=-M
-// label LOOP
-(LOOP)
-// goto LOOP
-@LOOP
-0;JMP
-// push static 8
-@_test.8
-D=M
-@SP
-A=M
-M=D
-@SP
-M=M+1
-// if-goto LOOP
-@SP
-AM=M-1
-D=M
-@LOOP
-D;JNE
-// push constant 5
-@5
+// push constant 1
+@1
 D=A
 @SP
 A=M
 M=D
 @SP
 M=M+1
+// pop local 1
+@1
+D=A
+@LCL
+D=D+M
+@R13
+M=D
+@SP
+AM=M-1
+D=M
+@R13
+A=M
+M=D
+// label LOOP
+(mult$LOOP)
+// push local 1
+@1
+D=A
+@LCL
+A=D+A
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1
+// push argument 1
+@1
+D=A
+@ARG
+A=D+A
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1
+// gt
+@SP
+AM=M-1
+D=M
+A=A-1
+D=M-D
+@__VM_test_GT_TRUE_1
+D;JGT
+@SP
+A=M-1
+M=0
+@__VM_test_GT_END_1
+0;JMP
+(__VM_test_GT_TRUE_1)
+@SP
+A=M-1
+M=-1
+(__VM_test_GT_END_1)
+// if-goto END
+@SP
+AM=M-1
+D=M
+@mult$END
+D;JNE
+// push local 0
+@0
+D=A
+@LCL
+A=D+A
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1
+// push argument 0
+@0
+D=A
+@ARG
+A=D+A
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1
+// add
+@SP
+AM=M-1
+D=M
+A=A-1
+M=D+M
+// pop local 0
+@0
+D=A
+@LCL
+D=D+M
+@R13
+M=D
+@SP
+AM=M-1
+D=M
+@R13
+A=M
+M=D
+// push local 1
+@1
+D=A
+@LCL
+A=D+A
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1
+// push constant 1
+@1
+D=A
+@SP
+A=M
+M=D
+@SP
+M=M+1
+// add
+@SP
+AM=M-1
+D=M
+A=A-1
+M=D+M
+// pop local 1
+@1
+D=A
+@LCL
+D=D+M
+@R13
+M=D
+@SP
+AM=M-1
+D=M
+@R13
+A=M
+M=D
+// goto LOOP
+@mult$LOOP
+0;JMP
+// label END
+(mult$END)
+// push local 0
+@0
+D=A
+@LCL
+A=D+A
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1
+// return
+@LCL
+D=M
+@R13
+M=D
+@5
+A=D-A
+D=M
+@R14
+M=D
+@SP
+AM=M-1
+D=M
+@ARG
+A=M
+M=D
+@ARG
+D=M+1
+@SP
+M=D
+@R13
+AM=M-1
+D=M
+@THAT
+M=D
+@R13
+AM=M-1
+D=M
+@THIS
+M=D
+@R13
+AM=M-1
+D=M
+@ARG
+M=D
+@R13
+AM=M-1
+D=M
+@LCL
+M=D
+@R14
+A=M
+0;JMP

@@ -10,7 +10,8 @@ using namespace std;
 const string WHITESPACE = " \n\r\t\f\v";
 string staticVarName = "";
 const int TEMPADDRSTART = 5;
-int labelcounter = 0;
+int symbolcounter = 0;
+string currentFunction = "";
 
 enum class ACTION {
 	PUSH,	  // 3
@@ -76,7 +77,7 @@ unordered_map<string, ACTION> actions({
 	{"if-goto", ACTION::IFGOTO},
 	{"call", ACTION::CALL},
 	{"function", ACTION::FUNCTION},
-	{"RETURN", ACTION::RETURN},
+	{"return", ACTION::RETURN},
 });
 unordered_map<string, SEGMENT> segments({
 	{"local", SEGMENT::LOCAL},
@@ -230,9 +231,12 @@ vector<string> getCompGenAssembly(const Instruction &ins);
 vector<string> getLabelAssembly(const Instruction &ins);
 vector<string> getGotoAssembly(const Instruction &ins);
 vector<string> getIfGotoAssembly(const Instruction &ins);
-
+vector<string> getFunctionAssembly(const Instruction &ins);
+// get push SEGMENT assembly for LCL, ARG, THIS, THAT
+vector<string> getGenPushSegAssembly(SEGMENT segment);
+vector<string> getCallAssembly(const Instruction &ins);
+vector<string> getReturnAssembly();
 int main(int argc, char **argv) {
-
 	// getting filename as an argument
 	if (argc != 2) {
 		cout << "Usage: ./vm <filename>\n";
@@ -283,11 +287,15 @@ int main(int argc, char **argv) {
 			instruction.push_back(token);
 		}
 		instructionSize = instruction.size();
-		if (actions.find(instruction.at(0)) == actions.end() ||
-			instructionSize > 3) {
+		if (actions.find(instruction.at(0)) == actions.end()) {
 			reporterror(inputfilename, linecnt, "Invalid instruction",
 						cleanedline);
-			return STATUS::INVALID_OPERATION;
+			return STATUS::INVALID_INSTR;
+		}
+		if (instructionSize > 3) {
+			reporterror(inputfilename, linecnt,
+						"Invalid instruction, too many arguments", cleanedline);
+			return STATUS::INVALID_INSTR;
 		}
 
 		ACTION action = actions.at(instruction.at(0));
@@ -295,7 +303,9 @@ int main(int argc, char **argv) {
 		if (action == ACTION::PUSH || action == ACTION::POP) {
 			if (instructionSize != 3) {
 				reporterror(inputfilename, linecnt,
-							actionToString(action)+" require segment and index!!!\n( "+actionToString(action)+" segment i )",
+							actionToString(action) +
+								" requires segment and index!!!\n( " +
+								actionToString(action) + " segment i )",
 							cleanedline);
 				return STATUS::INVALID_INSTR;
 			}
@@ -304,41 +314,52 @@ int main(int argc, char **argv) {
 					   [](unsigned char c) { return std::isdigit(c); });
 			if (!is_all_digits) {
 				reporterror(inputfilename, linecnt,
-							"Invalid memory address - (i) !!!", cleanedline);
+							"Invalid memory address - (" + instruction.at(2) +
+								")!!!",
+							cleanedline);
 				return STATUS::INVALID_ADDRESS;
 			}
 			int i = stoi(instruction.at(2));
 			if (segments.find(instruction.at(1)) == segments.end()) {
-				reporterror(inputfilename, linecnt, "Invalid segment!!!\n{ LOCAL, ARGUMENT, STATIC, CONSTANT, THIS, THAT, TEMP, POINTER }",
+				reporterror(inputfilename, linecnt,
+							"Invalid segment!!!\nvalid segments : local, "
+							"argument, static, "
+							"constant, this, that, temp, pointer",
 							cleanedline);
 				return STATUS::INVALID_SEGMENT;
 			}
 			SEGMENT segment = segments.at(instruction[1]);
 			if (action == ACTION::POP && segment == SEGMENT::CONSTANT) {
 				reporterror(inputfilename, linecnt,
-							"Instruction pop constant not allowed!!!",
+							"Instruction (pop constant) not allowed!!!",
 							cleanedline);
 				return STATUS::INVALID_INSTR;
 			}
 			if (segment == SEGMENT::TEMP && (i < 0 || i > 7)) {
 				reporterror(inputfilename, linecnt,
-							"Invalid index for TEMP segment (0..7)!!!",
+							"Invalid index for TEMP segment!!!\nvalid index - "
+							"0, 1, 2, 3, 4, 5, 6, 7",
 							cleanedline);
 				return STATUS::INVALID_TEMP_INDEX;
 			}
 			if (segment == SEGMENT::POINTER && i != 0 && i != 1) {
-				reporterror(inputfilename, linecnt,
-							"Invalid index for POINTER segment (0 or 1)!!!",
-							cleanedline);
+				reporterror(
+					inputfilename, linecnt,
+					"Invalid index for POINTER segment!!!\nvalid index - 0, 1",
+					cleanedline);
 				return STATUS::INVALID_POINTER_INDEX;
 			}
 			ins.segment = segment;
 			ins.index = i;
-		}
-		else if (action == ACTION::FUNCTION || action == ACTION::CALL) {
+		} else if (action == ACTION::FUNCTION || action == ACTION::CALL) {
 			if (instructionSize != 3) {
-				reporterror(inputfilename, linecnt,
-							" requires label and ",
+				string errmsg = "";
+				if(action == ACTION::FUNCTION){
+					errmsg = actionToString(action)+" requies label and no. of variables(nVars)";
+				} else if (action == ACTION::CALL){
+					errmsg = actionToString(action)+" requies label and no. of arguments(nArgs)";
+				}
+				reporterror(inputfilename, linecnt, errmsg,
 							cleanedline);
 				return STATUS::INVALID_INSTR;
 			}
@@ -353,12 +374,14 @@ int main(int argc, char **argv) {
 			}
 			if (action == ACTION::FUNCTION && !is_all_digits) {
 				reporterror(inputfilename, linecnt,
-							"invalid no. of variables(nVars) value", cleanedline);
+							"invalid no. of variables(nVars) value",
+							cleanedline);
 				return STATUS::INVALID_ADDRESS;
 			}
 			if (action == ACTION::CALL && !is_all_digits) {
 				reporterror(inputfilename, linecnt,
-							"invalid no. of arguments(nArgs) value", cleanedline);
+							"invalid no. of arguments(nArgs) value",
+							cleanedline);
 				return STATUS::INVALID_ADDRESS;
 			}
 			int i = stoi(instruction.at(2));
@@ -437,7 +460,8 @@ string removeComment(string str) {
 void reporterror(string filename, int linenum, string msg, string input) {
 	cout << "ERROR: AT LINE " << linenum << " : " << filename << ":" << linenum
 		 << "\n";
-	cout << msg << " [ " << input << " ]\n";
+	cout << "[ " << input << " ]\n";
+	cout << msg << "\n";
 }
 
 /**
@@ -551,6 +575,15 @@ vector<string> handleInstruction(const Instruction &ins) {
 	case ACTION::IFGOTO:
 		temp = getIfGotoAssembly(ins);
 		break;
+	case ACTION::FUNCTION:
+		temp = getFunctionAssembly(ins);
+		break;
+	case ACTION::CALL:
+		temp = getCallAssembly(ins);
+		break;
+	case ACTION::RETURN:
+		temp = getReturnAssembly();
+		break;
 	}
 	res.insert(res.end(), temp.begin(), temp.end());
 	return res;
@@ -563,6 +596,9 @@ string getInstruction(const Instruction &ins) {
 	} else if (ins.action == ACTION::LABEL || ins.action == ACTION::GOTO ||
 			   ins.action == ACTION::IFGOTO) {
 		return actionToString(ins.action) + " " + ins.label;
+	} else if (ins.action == ACTION::FUNCTION || ins.action == ACTION::CALL) {
+		return actionToString(ins.action) + " " + ins.label + " " +
+			   to_string(ins.index);
 	} else {
 		return actionToString(ins.action);
 	}
@@ -570,10 +606,10 @@ string getInstruction(const Instruction &ins) {
 
 SymbolPair getNextSymbols(ACTION action) {
 	string truesymbol = "__VM_" + staticVarName + "_" + compActionBase(action) +
-						"_TRUE_" + to_string(labelcounter);
+						"_TRUE_" + to_string(symbolcounter);
 	string endsymbol = "__VM_" + staticVarName + "_" + compActionBase(action) +
-					   "_END_" + to_string(labelcounter);
-	labelcounter++;
+					   "_END_" + to_string(symbolcounter);
+	symbolcounter++;
 	return {truesymbol, endsymbol};
 }
 
@@ -616,7 +652,7 @@ vector<string> getPushGenAssembly(const Instruction &ins) {
 }
 
 vector<string> getPopStaticAssembly(const Instruction &ins) {
-	string staticvar = staticVarName + "." + to_string(ins.index);
+	string staticvar = "__VM_" + staticVarName + "." + to_string(ins.index);
 	return {"@SP", "AM=M-1", "D=M", "@" + staticvar, "M=D"};
 }
 vector<string> getPushStaticAssembly(const Instruction &ins) {
@@ -691,12 +727,106 @@ vector<string> getCompGenAssembly(const Instruction &ins) {
 }
 
 vector<string> getLabelAssembly(const Instruction &ins) {
-	return {"(" + ins.label + ")"};
+	return {"(" + currentFunction + "$" + ins.label + ")"};
 }
 
 vector<string> getGotoAssembly(const Instruction &ins) {
-	return {"@" + ins.label, "0;JMP"};
+	return {"@" + currentFunction + "$" + ins.label, "0;JMP"};
 }
 vector<string> getIfGotoAssembly(const Instruction &ins) {
-	return {"@SP", "AM=M-1", "D=M", "@" + ins.label, "D;JNE"};
+	return {"@SP", "AM=M-1", "D=M", "@" + currentFunction + "$" + ins.label,
+			"D;JNE"};
+}
+
+vector<string> getFunctionAssembly(const Instruction &ins) {
+	vector<string> res;
+	currentFunction = ins.label;
+	res.push_back("(" + ins.label + ")");
+	for (int i = 0; i < ins.index; i++) {
+		res.push_back("@SP");
+		res.push_back("A=M");
+		res.push_back("M=0");
+		res.push_back("@SP");
+		res.push_back("M=M+1");
+	}
+	return res;
+}
+
+vector<string> getGenPushSegAssembly(SEGMENT segment) {
+	return {
+		"@" + segmentBase(segment), "D=M", "@SP", "A=M", "M=D", "@SP", "M=M+1"};
+}
+
+vector<string> getCallAssembly(const Instruction &ins) {
+	vector<string> res;
+	vector<string> temp;
+	vector<SEGMENT> segments(
+		{SEGMENT::LOCAL, SEGMENT::ARGUMENT, SEGMENT::THIS, SEGMENT::THAT});
+	string returnLabel = "__VM_RETURN_" + to_string(symbolcounter);
+	symbolcounter++;
+	// push return address
+	res.push_back("@" + returnLabel);
+	res.push_back("D=A");
+	res.push_back("@SP");
+	res.push_back("A=M");
+	res.push_back("M=D");
+	res.push_back("@SP");
+	res.push_back("M=M+1");
+	for (auto &seg : segments) {
+		temp = getGenPushSegAssembly(seg);
+		res.insert(res.end(), temp.begin(), temp.end());
+	}
+	// ARG = SP - 5 - nArgs
+	res.push_back("@SP");
+	res.push_back("D=M");
+	res.push_back("@5");
+	res.push_back("D=D-A");
+	res.push_back("@" + to_string(ins.index));
+	res.push_back("D=D-A");
+	res.push_back("@ARG");
+	res.push_back("M=D");
+
+	// LCL = SP
+	res.push_back("@SP");
+	res.push_back("D=M");
+	res.push_back("@LCL");
+	res.push_back("M=D");
+
+	// goto function
+	res.push_back("@" + ins.label);
+	res.push_back("0;JMP");
+
+	// return address label
+	res.push_back("(" + returnLabel + ")");
+
+	return res;
+}
+
+vector<string> getReturnAssembly() {
+	return {// FRAME = LCL
+			"@LCL", "D=M", "@R13", "M=D",
+
+			// RET = *(FRAME - 5)
+			"@5", "A=D-A", "D=M", "@R14", "M=D",
+
+			// *ARG = pop()
+			"@SP", "AM=M-1", "D=M", "@ARG", "A=M", "M=D",
+
+			// SP = ARG + 1
+			"@ARG", "D=M+1", "@SP", "M=D",
+
+			// THAT = *(FRAME - 1)
+			"@R13", "AM=M-1", "D=M", "@THAT", "M=D",
+
+			// THIS = *(FRAME - 2)
+			"@R13", "AM=M-1", "D=M", "@THIS", "M=D",
+
+			// ARG = *(FRAME - 3)
+			"@R13", "AM=M-1", "D=M", "@ARG", "M=D",
+
+			// LCL = *(FRAME - 4)
+			"@R13", "AM=M-1", "D=M", "@LCL", "M=D",
+
+			// goto RET
+			"@R14", "A=M", "0;JMP"};
 }
