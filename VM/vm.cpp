@@ -13,20 +13,23 @@ const int TEMPADDRSTART = 5;
 int labelcounter = 0;
 
 enum class ACTION {
-	PUSH,
-	POP,
-	ADD,
-	SUB,
-	NEG,
-	EQ,
-	GT,
-	LT,
-	AND,
-	OR,
-	NOT,
-	LABEL,
-	GOTO,
-	IFGOTO
+	PUSH,	  // 3
+	POP,	  // 3
+	ADD,	  // 1
+	SUB,	  // 1
+	NEG,	  // 1
+	EQ,		  // 1
+	GT,		  // 1
+	LT,		  // 1
+	AND,	  // 1
+	OR,		  // 1
+	NOT,	  // 1
+	LABEL,	  // 2
+	GOTO,	  // 2
+	IFGOTO,	  // 2
+	CALL,	  // 3
+	FUNCTION, // 3
+	RETURN	  // 1
 };
 
 enum class SEGMENT {
@@ -56,20 +59,25 @@ enum STATUS {
 };
 
 // unordered_set<string> actions = {"push", "pop"};
-unordered_map<string, ACTION> actions({{"push", ACTION::PUSH},
-									   {"pop", ACTION::POP},
-									   {"add", ACTION::ADD},
-									   {"sub", ACTION::SUB},
-									   {"neg", ACTION::NEG},
-									   {"eq", ACTION::EQ},
-									   {"gt", ACTION::GT},
-									   {"lt", ACTION::LT},
-									   {"and", ACTION::AND},
-									   {"or", ACTION::OR},
-									   {"not", ACTION::NOT},
-									   {"label", ACTION::LABEL},
-									   {"goto", ACTION::GOTO},
-									   {"if-goto", ACTION::IFGOTO}});
+unordered_map<string, ACTION> actions({
+	{"push", ACTION::PUSH},
+	{"pop", ACTION::POP},
+	{"add", ACTION::ADD},
+	{"sub", ACTION::SUB},
+	{"neg", ACTION::NEG},
+	{"eq", ACTION::EQ},
+	{"gt", ACTION::GT},
+	{"lt", ACTION::LT},
+	{"and", ACTION::AND},
+	{"or", ACTION::OR},
+	{"not", ACTION::NOT},
+	{"label", ACTION::LABEL},
+	{"goto", ACTION::GOTO},
+	{"if-goto", ACTION::IFGOTO},
+	{"call", ACTION::CALL},
+	{"function", ACTION::FUNCTION},
+	{"RETURN", ACTION::RETURN},
+});
 unordered_map<string, SEGMENT> segments({
 	{"local", SEGMENT::LOCAL},
 	{"argument", SEGMENT::ARGUMENT},
@@ -133,6 +141,12 @@ string actionToString(ACTION action) {
 		return "goto";
 	case ACTION::IFGOTO:
 		return "if-goto";
+	case ACTION::CALL:
+		return "call";
+	case ACTION::FUNCTION:
+		return "function";
+	case ACTION::RETURN:
+		return "return";
 	}
 	return "invalid";
 }
@@ -191,7 +205,7 @@ void reporterror(string filename, int linenum, string msg, string input);
 // checks if label provided is valid
 bool isValidLabel(const std::string &label);
 // handles instruction generation
-vector<string> handleInstruction(const Instruction &instruction, string &error);
+vector<string> handleInstruction(const Instruction &instruction);
 // gets constructed comment for vm command
 string getInstruction(const Instruction &ins);
 // gets next true and end symbols according to the counter
@@ -248,6 +262,7 @@ int main(int argc, char **argv) {
 	string line;
 	string cleanedline;
 
+	// input parsing and validation
 	while (getline(inputfile, line)) {
 		linecnt++;
 		ins = {};
@@ -260,137 +275,122 @@ int main(int argc, char **argv) {
 		}
 
 		vector<string> instruction;
+		int instructionSize = 0;
 		stringstream ss(cleanedline);
 		string token;
 
 		while (ss >> token) {
 			instruction.push_back(token);
 		}
+		instructionSize = instruction.size();
+		if (actions.find(instruction.at(0)) == actions.end() ||
+			instructionSize > 3) {
+			reporterror(inputfilename, linecnt, "Invalid instruction",
+						cleanedline);
+			return STATUS::INVALID_OPERATION;
+		}
 
-		// Arithmetic / logical command
-		if (instruction.size() == 1) {
-
-			if (actions.find(instruction[0]) == actions.end()) {
+		ACTION action = actions.at(instruction.at(0));
+		ins.action = action;
+		if (action == ACTION::PUSH || action == ACTION::POP) {
+			if (instructionSize != 3) {
 				reporterror(inputfilename, linecnt,
-							"Invalid arithmetic or logical command",
-							cleanedline);
-				return STATUS::INVALID_OPERATION;
-			}
-			ACTION action = actions.at(instruction[0]);
-
-			if (action == ACTION::PUSH || action == ACTION::POP) {
-				reporterror(inputfilename, linecnt,
-							"Push/pop require a segment and index",
+							actionToString(action)+" require segment and index!!!\n( "+actionToString(action)+" segment i )",
 							cleanedline);
 				return STATUS::INVALID_INSTR;
 			}
-			ins.action = action;
-			ins.line = linecnt;
-		}
-
-		else if (instruction.size() == 2) {
-			if (actions.find(instruction[0]) == actions.end()) {
-				reporterror(inputfilename, linecnt, "Invalid branching command",
-							cleanedline);
-				return STATUS::INVALID_OPERATION;
-			}
-			ACTION action = actions.at(instruction[0]);
-			if (action != ACTION::LABEL && action != ACTION::GOTO &&
-				action != ACTION::IFGOTO) {
-				reporterror(inputfilename, linecnt, "Invalid branching command",
-							cleanedline);
-				return STATUS::INVALID_OPERATION;
-			}
-			string label = instruction[1];
-			if (!isValidLabel(label)) {
-				reporterror(inputfilename, linecnt, "Invalid label",
-							cleanedline);
-				return STATUS::INVALID_LABEL;
-			}
-			ins.action = action;
-			ins.label = label;
-			ins.line = linecnt;
-		}
-
-		// push / pop command
-		else if (instruction.size() == 3) {
-
-			if (actions.find(instruction[0]) == actions.end()) {
+			bool is_all_digits =
+				all_of(instruction.at(2).begin(), instruction.at(2).end(),
+					   [](unsigned char c) { return std::isdigit(c); });
+			if (!is_all_digits) {
 				reporterror(inputfilename, linecnt,
-							"Invalid action (push or pop)", cleanedline);
-				return STATUS::INVALID_ACTION;
+							"Invalid memory address - (i) !!!", cleanedline);
+				return STATUS::INVALID_ADDRESS;
 			}
-
-			if (segments.find(instruction[1]) == segments.end()) {
-				reporterror(inputfilename, linecnt, "Invalid segment",
+			int i = stoi(instruction.at(2));
+			if (segments.find(instruction.at(1)) == segments.end()) {
+				reporterror(inputfilename, linecnt, "Invalid segment!!!\n{ LOCAL, ARGUMENT, STATIC, CONSTANT, THIS, THAT, TEMP, POINTER }",
 							cleanedline);
 				return STATUS::INVALID_SEGMENT;
 			}
-
-			bool is_all_digits =
-				all_of(instruction[2].begin(), instruction[2].end(),
-					   [](unsigned char c) { return std::isdigit(c); });
-
-			if (!is_all_digits) {
-				reporterror(inputfilename, linecnt, "Not a positive integer",
-							cleanedline);
-				return STATUS::INVALID_ADDRESS;
-			}
-
-			// semantic validations
-			ACTION action = actions.at(instruction[0]);
 			SEGMENT segment = segments.at(instruction[1]);
-			int i = stoi(instruction[2]);
-			if (action != ACTION::PUSH && action != ACTION::POP) {
-				reporterror(inputfilename, linecnt,
-							"Invalid Action with segments!!!", cleanedline);
-				return STATUS::INVALID_ACTION;
-			}
-
 			if (action == ACTION::POP && segment == SEGMENT::CONSTANT) {
 				reporterror(inputfilename, linecnt,
-							"Invalid action and segment combination!!!",
+							"Instruction pop constant not allowed!!!",
 							cleanedline);
 				return STATUS::INVALID_INSTR;
 			}
-
-			if (segment == SEGMENT::TEMP) {
-				if (i < 0 || i > 7) {
-					reporterror(inputfilename, linecnt,
-								"Invalid index for TEMP SEG type (0..7)!!!",
-								cleanedline);
-					return STATUS::INVALID_TEMP_INDEX;
-				}
+			if (segment == SEGMENT::TEMP && (i < 0 || i > 7)) {
+				reporterror(inputfilename, linecnt,
+							"Invalid index for TEMP segment (0..7)!!!",
+							cleanedline);
+				return STATUS::INVALID_TEMP_INDEX;
 			}
-			if (segment == SEGMENT::POINTER) {
-				if (i != 0 && i != 1) {
-					reporterror(
-						inputfilename, linecnt,
-						"Invalid index for POINTER SEG type (0 or 1)!!!",
-						cleanedline);
-					return STATUS::INVALID_POINTER_INDEX;
-				}
+			if (segment == SEGMENT::POINTER && i != 0 && i != 1) {
+				reporterror(inputfilename, linecnt,
+							"Invalid index for POINTER segment (0 or 1)!!!",
+							cleanedline);
+				return STATUS::INVALID_POINTER_INDEX;
 			}
-			ins.action = action;
 			ins.segment = segment;
 			ins.index = i;
-			ins.line = linecnt;
-
+		}
+		else if (action == ACTION::FUNCTION || action == ACTION::CALL) {
+			if (instructionSize != 3) {
+				reporterror(inputfilename, linecnt,
+							" requires label and ",
+							cleanedline);
+				return STATUS::INVALID_INSTR;
+			}
+			bool is_all_digits =
+				all_of(instruction.at(2).begin(), instruction.at(2).end(),
+					   [](unsigned char c) { return std::isdigit(c); });
+			string funcname = instruction.at(1);
+			if (!isValidLabel(funcname)) {
+				reporterror(inputfilename, linecnt, "Invalid function name!!!",
+							cleanedline);
+				return STATUS::INVALID_LABEL;
+			}
+			if (action == ACTION::FUNCTION && !is_all_digits) {
+				reporterror(inputfilename, linecnt,
+							"invalid no. of variables(nVars) value", cleanedline);
+				return STATUS::INVALID_ADDRESS;
+			}
+			if (action == ACTION::CALL && !is_all_digits) {
+				reporterror(inputfilename, linecnt,
+							"invalid no. of arguments(nArgs) value", cleanedline);
+				return STATUS::INVALID_ADDRESS;
+			}
+			int i = stoi(instruction.at(2));
+			ins.label = funcname;
+			ins.index = i;
 		}
 
-		// Anything other than 1 or 3 tokens
-		else {
-			reporterror(inputfilename, linecnt, "Invalid instruction format",
-						cleanedline);
-			return STATUS::INVALID_INSTR;
+		else if (action == ACTION::LABEL || action == ACTION::GOTO ||
+				 action == ACTION::IFGOTO) {
+			if (instructionSize != 2) {
+				reporterror(inputfilename, linecnt,
+							"branching commands require a label!!!",
+							cleanedline);
+				return STATUS::INVALID_INSTR;
+			}
+			string label = instruction.at(1);
+			if (!isValidLabel(label)) {
+				reporterror(inputfilename, linecnt, "Invalid function name!!!",
+							cleanedline);
+				return STATUS::INVALID_LABEL;
+			}
+			ins.label = label;
 		}
 
+		ins.line = linecnt;
 		instructions.push_back(ins);
 	}
 
 	// for (auto &ins : instructions) {
 	// 	cout << static_cast<int>(ins.action) << " ";
 	// 	cout << static_cast<int>(ins.segment) << " ";
+	// 	cout << ins.label << " ";
 	// 	cout << static_cast<int>(ins.index) << " ";
 	// 	cout << ins.line << "\n";
 	// 	cout << "\n";
@@ -399,11 +399,7 @@ int main(int argc, char **argv) {
 	vector<string> tempout;
 	string error;
 	for (const auto &ins : instructions) {
-		tempout = handleInstruction(ins, error);
-		if (error != "") {
-			reporterror(inputfilename, ins.line, error, getInstruction(ins));
-			return STATUS::INVALID_INSTR;
-		}
+		tempout = handleInstruction(ins);
 		output.insert(output.end(), tempout.begin(), tempout.end());
 	}
 
@@ -474,9 +470,8 @@ bool isValidLabel(const std::string &label) {
 	return true;
 }
 
-vector<string> handleInstruction(const Instruction &ins, string &error) {
+vector<string> handleInstruction(const Instruction &ins) {
 	string instrstr = getInstruction(ins);
-	error = "";
 	vector<string> res({"// " + instrstr});
 	vector<string> temp;
 	switch (ins.action) {
@@ -574,9 +569,9 @@ string getInstruction(const Instruction &ins) {
 }
 
 SymbolPair getNextSymbols(ACTION action) {
-	string truesymbol = "_" + staticVarName + "_" + compActionBase(action) +
+	string truesymbol = "__VM_" + staticVarName + "_" + compActionBase(action) +
 						"_TRUE_" + to_string(labelcounter);
-	string endsymbol = "_" + staticVarName + "_" + compActionBase(action) +
+	string endsymbol = "__VM_" + staticVarName + "_" + compActionBase(action) +
 					   "_END_" + to_string(labelcounter);
 	labelcounter++;
 	return {truesymbol, endsymbol};
@@ -625,7 +620,7 @@ vector<string> getPopStaticAssembly(const Instruction &ins) {
 	return {"@SP", "AM=M-1", "D=M", "@" + staticvar, "M=D"};
 }
 vector<string> getPushStaticAssembly(const Instruction &ins) {
-	string staticvar = "_" + staticVarName + "." + to_string(ins.index);
+	string staticvar = "__VM_" + staticVarName + "." + to_string(ins.index);
 	return {"@" + staticvar, "D=M", "@SP", "A=M", "M=D", "@SP", "M=M+1"};
 }
 
