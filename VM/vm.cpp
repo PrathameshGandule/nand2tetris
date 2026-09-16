@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -7,10 +8,13 @@
 #include <vector>
 using namespace std;
 
+namespace fs = std::filesystem;
+
 const string WHITESPACE = " \n\r\t\f\v";
 string staticVarName = "";
 const int TEMPADDRSTART = 5;
 int symbolcounter = 0;
+int returncounter = 0;
 string currentFunction = "";
 
 enum class ACTION {
@@ -46,6 +50,7 @@ enum class SEGMENT {
 
 enum STATUS {
 	SUCCESS,
+	INVALID_INPUT,
 	INPUT_FILE_NOT_PROVIDED,
 	COULD_NOT_OPEN_INPUT_FILE,
 	COULD_NOT_OPEN_OUTPUT_FILE,
@@ -180,6 +185,13 @@ string compActionBase(ACTION action) {
 	}
 }
 
+string scopedLabel(const string &label) {
+	if (currentFunction.empty())
+		return label;
+
+	return currentFunction + "$" + label;
+}
+
 struct Instruction {
 	ACTION action;
 	SEGMENT segment;
@@ -236,198 +248,268 @@ vector<string> getFunctionAssembly(const Instruction &ins);
 vector<string> getGenPushSegAssembly(SEGMENT segment);
 vector<string> getCallAssembly(const Instruction &ins);
 vector<string> getReturnAssembly();
+vector<string> getBootstrapAssembly();
+
 int main(int argc, char **argv) {
-	// getting filename as an argument
-	if (argc != 2) {
-		cout << "Usage: ./vm <filename>\n";
-		return STATUS::INPUT_FILE_NOT_PROVIDED;
-	}
-	string inputfilename = string(argv[1]);
-
-	// opening file to read
-	ifstream inputfile(inputfilename);
-	if (!inputfile.is_open()) {
-		cout << "Couldn't open file named : " << inputfilename << "\n";
-		return STATUS::COULD_NOT_OPEN_INPUT_FILE;
-	}
-
-	size_t slash = inputfilename.find_last_of("/\\");
-	size_t dot = inputfilename.find_last_of('.');
-
-	string filename =
-		inputfilename.substr(slash == string::npos ? 0 : slash + 1,
-							 dot - (slash == string::npos ? 0 : slash + 1));
-
-	staticVarName = filename;
-
-	vector<Instruction> instructions;
-	Instruction ins;
-	int linecnt = 0;
-	string line;
-	string cleanedline;
-
-	// input parsing and validation
-	while (getline(inputfile, line)) {
-		linecnt++;
-		ins = {};
-
-		cleanedline = trim(line);
-
-		// Empty/comment-only line
-		if (cleanedline.empty()) {
-			continue;
-		}
-
-		vector<string> instruction;
-		int instructionSize = 0;
-		stringstream ss(cleanedline);
-		string token;
-
-		while (ss >> token) {
-			instruction.push_back(token);
-		}
-		instructionSize = instruction.size();
-		if (actions.find(instruction.at(0)) == actions.end()) {
-			reporterror(inputfilename, linecnt, "Invalid instruction",
-						cleanedline);
-			return STATUS::INVALID_INSTR;
-		}
-		if (instructionSize > 3) {
-			reporterror(inputfilename, linecnt,
-						"Invalid instruction, too many arguments", cleanedline);
-			return STATUS::INVALID_INSTR;
-		}
-
-		ACTION action = actions.at(instruction.at(0));
-		ins.action = action;
-		if (action == ACTION::PUSH || action == ACTION::POP) {
-			if (instructionSize != 3) {
-				reporterror(inputfilename, linecnt,
-							actionToString(action) +
-								" requires segment and index!!!\n( " +
-								actionToString(action) + " segment i )",
-							cleanedline);
-				return STATUS::INVALID_INSTR;
-			}
-			bool is_all_digits =
-				all_of(instruction.at(2).begin(), instruction.at(2).end(),
-					   [](unsigned char c) { return std::isdigit(c); });
-			if (!is_all_digits) {
-				reporterror(inputfilename, linecnt,
-							"Invalid memory address - (" + instruction.at(2) +
-								")!!!",
-							cleanedline);
-				return STATUS::INVALID_ADDRESS;
-			}
-			int i = stoi(instruction.at(2));
-			if (segments.find(instruction.at(1)) == segments.end()) {
-				reporterror(inputfilename, linecnt,
-							"Invalid segment!!!\nvalid segments : local, "
-							"argument, static, "
-							"constant, this, that, temp, pointer",
-							cleanedline);
-				return STATUS::INVALID_SEGMENT;
-			}
-			SEGMENT segment = segments.at(instruction[1]);
-			if (action == ACTION::POP && segment == SEGMENT::CONSTANT) {
-				reporterror(inputfilename, linecnt,
-							"Instruction (pop constant) not allowed!!!",
-							cleanedline);
-				return STATUS::INVALID_INSTR;
-			}
-			if (segment == SEGMENT::TEMP && (i < 0 || i > 7)) {
-				reporterror(inputfilename, linecnt,
-							"Invalid index for TEMP segment!!!\nvalid index - "
-							"0, 1, 2, 3, 4, 5, 6, 7",
-							cleanedline);
-				return STATUS::INVALID_TEMP_INDEX;
-			}
-			if (segment == SEGMENT::POINTER && i != 0 && i != 1) {
-				reporterror(
-					inputfilename, linecnt,
-					"Invalid index for POINTER segment!!!\nvalid index - 0, 1",
-					cleanedline);
-				return STATUS::INVALID_POINTER_INDEX;
-			}
-			ins.segment = segment;
-			ins.index = i;
-		} else if (action == ACTION::FUNCTION || action == ACTION::CALL) {
-			if (instructionSize != 3) {
-				string errmsg = "";
-				if(action == ACTION::FUNCTION){
-					errmsg = actionToString(action)+" requies label and no. of variables(nVars)";
-				} else if (action == ACTION::CALL){
-					errmsg = actionToString(action)+" requies label and no. of arguments(nArgs)";
-				}
-				reporterror(inputfilename, linecnt, errmsg,
-							cleanedline);
-				return STATUS::INVALID_INSTR;
-			}
-			bool is_all_digits =
-				all_of(instruction.at(2).begin(), instruction.at(2).end(),
-					   [](unsigned char c) { return std::isdigit(c); });
-			string funcname = instruction.at(1);
-			if (!isValidLabel(funcname)) {
-				reporterror(inputfilename, linecnt, "Invalid function name!!!",
-							cleanedline);
-				return STATUS::INVALID_LABEL;
-			}
-			if (action == ACTION::FUNCTION && !is_all_digits) {
-				reporterror(inputfilename, linecnt,
-							"invalid no. of variables(nVars) value",
-							cleanedline);
-				return STATUS::INVALID_ADDRESS;
-			}
-			if (action == ACTION::CALL && !is_all_digits) {
-				reporterror(inputfilename, linecnt,
-							"invalid no. of arguments(nArgs) value",
-							cleanedline);
-				return STATUS::INVALID_ADDRESS;
-			}
-			int i = stoi(instruction.at(2));
-			ins.label = funcname;
-			ins.index = i;
-		}
-
-		else if (action == ACTION::LABEL || action == ACTION::GOTO ||
-				 action == ACTION::IFGOTO) {
-			if (instructionSize != 2) {
-				reporterror(inputfilename, linecnt,
-							"branching commands require a label!!!",
-							cleanedline);
-				return STATUS::INVALID_INSTR;
-			}
-			string label = instruction.at(1);
-			if (!isValidLabel(label)) {
-				reporterror(inputfilename, linecnt, "Invalid function name!!!",
-							cleanedline);
-				return STATUS::INVALID_LABEL;
-			}
-			ins.label = label;
-		}
-
-		ins.line = linecnt;
-		instructions.push_back(ins);
-	}
-
-	// for (auto &ins : instructions) {
-	// 	cout << static_cast<int>(ins.action) << " ";
-	// 	cout << static_cast<int>(ins.segment) << " ";
-	// 	cout << ins.label << " ";
-	// 	cout << static_cast<int>(ins.index) << " ";
-	// 	cout << ins.line << "\n";
-	// 	cout << "\n";
-	// }
 	vector<string> output;
 	vector<string> tempout;
-	string error;
-	for (const auto &ins : instructions) {
-		tempout = handleInstruction(ins);
+	// getting filename as an argument
+	if (argc != 2) {
+		cout << "Usage: ./vm <file.vm | directory>\n";
+		return STATUS::INPUT_FILE_NOT_PROVIDED;
+	}
+	vector<fs::path> inputfileslist;
+	fs::path cmdinput = argv[1];
+	if (!fs::exists(cmdinput)) {
+		cerr << "Error: file/directory not found: " << cmdinput << '\n';
+		return STATUS::COULD_NOT_OPEN_INPUT_FILE;
+	}
+	fs::path canoninp = fs::canonical(cmdinput);
+	cout << "input : " << canoninp << '\n';
+	fs::path outputpath;
+	if (fs::is_regular_file(canoninp)) {
+
+		if (canoninp.extension() != ".vm") {
+			cerr << "Error: input file must have .vm extension\n";
+			return STATUS::INPUT_FILE_NOT_PROVIDED;
+		}
+		inputfileslist.push_back(canoninp);
+
+		outputpath = canoninp;
+		outputpath.replace_extension(".asm");
+
+		cout << "outputfile : " << outputpath << '\n';
+	} else if (fs::is_directory(canoninp)) {
+		for (const auto &entry : fs::directory_iterator(canoninp)) {
+			if (entry.is_regular_file() && entry.path().extension() == ".vm") {
+				inputfileslist.push_back(fs::canonical(entry.path()));
+			}
+		}
+
+		// No VM files found
+		if (inputfileslist.empty()) {
+			cerr << "Error: directory contains no .vm files\n";
+			return STATUS::INPUT_FILE_NOT_PROVIDED;
+		}
+
+		// Make translation order deterministic
+		sort(inputfileslist.begin(), inputfileslist.end());
+
+		// Program/Program.asm
+		outputpath = canoninp / (canoninp.filename().string() + ".asm");
+
+		cout << "outputfile : " << outputpath << '\n';
+		tempout = getBootstrapAssembly();
 		output.insert(output.end(), tempout.begin(), tempout.end());
+
 	}
 
-	string outputfilename = filename + ".asm";
-	ofstream ofile(outputfilename);
+	// --------------------------------------------------
+	// Neither file nor directory
+	// --------------------------------------------------
+	else {
+		cerr << "Error: input is neither a regular file "
+				"nor a directory\n";
+		return STATUS::INPUT_FILE_NOT_PROVIDED;
+	}
+
+	string inputfilename;
+	for (fs::path &file : inputfileslist) {
+		currentFunction = "";
+		inputfilename = file;
+		// opening file to read
+		ifstream inputfile(inputfilename);
+		if (!inputfile.is_open()) {
+			cout << "Couldn't open file named bruhh : " << inputfilename
+				 << "\n";
+			return STATUS::COULD_NOT_OPEN_INPUT_FILE;
+		}
+
+		// size_t slash = inputfilename.find_last_of("/\\");
+		// size_t dot = inputfilename.find_last_of('.');
+
+		// string filename =
+		// 	inputfilename.substr(slash == string::npos ? 0 : slash + 1,
+		// 						 dot - (slash == string::npos ? 0 : slash + 1));
+
+		staticVarName = file.filename().stem().string();
+
+		vector<Instruction> instructions;
+		Instruction ins;
+		int linecnt = 0;
+		string line;
+		string cleanedline;
+
+		// input parsing and validation
+		while (getline(inputfile, line)) {
+			linecnt++;
+			ins = {};
+
+			cleanedline = trim(line);
+
+			// Empty/comment-only line
+			if (cleanedline.empty()) {
+				continue;
+			}
+
+			vector<string> instruction;
+			int instructionSize = 0;
+			stringstream ss(cleanedline);
+			string token;
+
+			while (ss >> token) {
+				instruction.push_back(token);
+			}
+			instructionSize = instruction.size();
+			if (actions.find(instruction.at(0)) == actions.end()) {
+				reporterror(inputfilename, linecnt, "Invalid instruction",
+							cleanedline);
+				return STATUS::INVALID_INSTR;
+			}
+			if (instructionSize > 3) {
+				reporterror(inputfilename, linecnt,
+							"Invalid instruction, too many arguments",
+							cleanedline);
+				return STATUS::INVALID_INSTR;
+			}
+
+			ACTION action = actions.at(instruction.at(0));
+			ins.action = action;
+			if (action == ACTION::PUSH || action == ACTION::POP) {
+				if (instructionSize != 3) {
+					reporterror(inputfilename, linecnt,
+								actionToString(action) +
+									" requires segment and index!!!\n( " +
+									actionToString(action) + " segment i )",
+								cleanedline);
+					return STATUS::INVALID_INSTR;
+				}
+				bool is_all_digits =
+					all_of(instruction.at(2).begin(), instruction.at(2).end(),
+						   [](unsigned char c) { return std::isdigit(c); });
+				if (!is_all_digits) {
+					reporterror(inputfilename, linecnt,
+								"Invalid memory address - (" +
+									instruction.at(2) + ")!!!",
+								cleanedline);
+					return STATUS::INVALID_ADDRESS;
+				}
+				int i = stoi(instruction.at(2));
+				if (segments.find(instruction.at(1)) == segments.end()) {
+					reporterror(inputfilename, linecnt,
+								"Invalid segment!!!\nvalid segments : local, "
+								"argument, static, "
+								"constant, this, that, temp, pointer",
+								cleanedline);
+					return STATUS::INVALID_SEGMENT;
+				}
+				SEGMENT segment = segments.at(instruction[1]);
+				if (action == ACTION::POP && segment == SEGMENT::CONSTANT) {
+					reporterror(inputfilename, linecnt,
+								"Instruction (pop constant) not allowed!!!",
+								cleanedline);
+					return STATUS::INVALID_INSTR;
+				}
+				if (action == ACTION::PUSH && segment == SEGMENT::CONSTANT && i > 32767) {
+					reporterror(inputfilename, linecnt,
+								"index greater than 32767!!!",
+								cleanedline);
+					return STATUS::INVALID_INSTR;
+				}
+				if (segment == SEGMENT::TEMP && (i < 0 || i > 7)) {
+					reporterror(
+						inputfilename, linecnt,
+						"Invalid index for TEMP segment!!!\nvalid index - "
+						"0, 1, 2, 3, 4, 5, 6, 7",
+						cleanedline);
+					return STATUS::INVALID_TEMP_INDEX;
+				}
+				if (segment == SEGMENT::POINTER && i != 0 && i != 1) {
+					reporterror(inputfilename, linecnt,
+								"Invalid index for POINTER segment!!!\nvalid "
+								"index - 0, 1",
+								cleanedline);
+					return STATUS::INVALID_POINTER_INDEX;
+				}
+				ins.segment = segment;
+				ins.index = i;
+			} else if (action == ACTION::FUNCTION || action == ACTION::CALL) {
+				if (instructionSize != 3) {
+					string errmsg = "";
+					if (action == ACTION::FUNCTION) {
+						errmsg = actionToString(action) +
+								 " requies label and no. of variables(nVars)";
+					} else if (action == ACTION::CALL) {
+						errmsg = actionToString(action) +
+								 " requies label and no. of arguments(nArgs)";
+					}
+					reporterror(inputfilename, linecnt, errmsg, cleanedline);
+					return STATUS::INVALID_INSTR;
+				}
+				bool is_all_digits =
+					all_of(instruction.at(2).begin(), instruction.at(2).end(),
+						   [](unsigned char c) { return std::isdigit(c); });
+				string funcname = instruction.at(1);
+				if (!isValidLabel(funcname)) {
+					reporterror(inputfilename, linecnt,
+								"Invalid function name!!!", cleanedline);
+					return STATUS::INVALID_LABEL;
+				}
+				if (action == ACTION::FUNCTION && !is_all_digits) {
+					reporterror(inputfilename, linecnt,
+								"invalid no. of variables(nVars) value",
+								cleanedline);
+					return STATUS::INVALID_ADDRESS;
+				}
+				if (action == ACTION::CALL && !is_all_digits) {
+					reporterror(inputfilename, linecnt,
+								"invalid no. of arguments(nArgs) value",
+								cleanedline);
+					return STATUS::INVALID_ADDRESS;
+				}
+				int i = stoi(instruction.at(2));
+				ins.label = funcname;
+				ins.index = i;
+			}
+
+			else if (action == ACTION::LABEL || action == ACTION::GOTO ||
+					 action == ACTION::IFGOTO) {
+				if (instructionSize != 2) {
+					reporterror(inputfilename, linecnt,
+								"branching commands require a label!!!",
+								cleanedline);
+					return STATUS::INVALID_INSTR;
+				}
+				string label = instruction.at(1);
+				if (!isValidLabel(label)) {
+					reporterror(inputfilename, linecnt,
+								"Invalid function name!!!", cleanedline);
+					return STATUS::INVALID_LABEL;
+				}
+				ins.label = label;
+			}
+
+			ins.line = linecnt;
+			instructions.push_back(ins);
+		}
+
+		// for (auto &ins : instructions) {
+		// 	cout << static_cast<int>(ins.action) << " ";
+		// 	cout << static_cast<int>(ins.segment) << " ";
+		// 	cout << ins.label << " ";
+		// 	cout << static_cast<int>(ins.index) << " ";
+		// 	cout << ins.line << "\n";
+		// 	cout << "\n";
+		// }
+
+		string error;
+		for (const auto &ins : instructions) {
+			tempout = handleInstruction(ins);
+			output.insert(output.end(), tempout.begin(), tempout.end());
+		}
+	}
+
+	ofstream ofile(outputpath);
 	if (!ofile) {
 		cerr << "Error opening file\n";
 		return STATUS::COULD_NOT_OPEN_OUTPUT_FILE;
@@ -605,9 +687,9 @@ string getInstruction(const Instruction &ins) {
 }
 
 SymbolPair getNextSymbols(ACTION action) {
-	string truesymbol = "__VM_" + staticVarName + "_" + compActionBase(action) +
+	string truesymbol = "VM_" + staticVarName + "_" + compActionBase(action) +
 						"_TRUE_" + to_string(symbolcounter);
-	string endsymbol = "__VM_" + staticVarName + "_" + compActionBase(action) +
+	string endsymbol = "VM_" + staticVarName + "_" + compActionBase(action) +
 					   "_END_" + to_string(symbolcounter);
 	symbolcounter++;
 	return {truesymbol, endsymbol};
@@ -652,11 +734,11 @@ vector<string> getPushGenAssembly(const Instruction &ins) {
 }
 
 vector<string> getPopStaticAssembly(const Instruction &ins) {
-	string staticvar = "__VM_" + staticVarName + "." + to_string(ins.index);
+	string staticvar = "VM_" + staticVarName + "." + to_string(ins.index);
 	return {"@SP", "AM=M-1", "D=M", "@" + staticvar, "M=D"};
 }
 vector<string> getPushStaticAssembly(const Instruction &ins) {
-	string staticvar = "__VM_" + staticVarName + "." + to_string(ins.index);
+	string staticvar = "VM_" + staticVarName + "." + to_string(ins.index);
 	return {"@" + staticvar, "D=M", "@SP", "A=M", "M=D", "@SP", "M=M+1"};
 }
 
@@ -727,15 +809,14 @@ vector<string> getCompGenAssembly(const Instruction &ins) {
 }
 
 vector<string> getLabelAssembly(const Instruction &ins) {
-	return {"(" + currentFunction + "$" + ins.label + ")"};
+	return {"(" + scopedLabel(ins.label) + ")"};
 }
 
 vector<string> getGotoAssembly(const Instruction &ins) {
-	return {"@" + currentFunction + "$" + ins.label, "0;JMP"};
+	return {"@" + scopedLabel(ins.label), "0;JMP"};
 }
 vector<string> getIfGotoAssembly(const Instruction &ins) {
-	return {"@SP", "AM=M-1", "D=M", "@" + currentFunction + "$" + ins.label,
-			"D;JNE"};
+	return {"@SP", "AM=M-1", "D=M", "@" + scopedLabel(ins.label), "D;JNE"};
 }
 
 vector<string> getFunctionAssembly(const Instruction &ins) {
@@ -762,8 +843,8 @@ vector<string> getCallAssembly(const Instruction &ins) {
 	vector<string> temp;
 	vector<SEGMENT> segments(
 		{SEGMENT::LOCAL, SEGMENT::ARGUMENT, SEGMENT::THIS, SEGMENT::THAT});
-	string returnLabel = "__VM_RETURN_" + to_string(symbolcounter);
-	symbolcounter++;
+	string returnLabel = "VM_RETURN_" + to_string(returncounter);
+	returncounter++;
 	// push return address
 	res.push_back("@" + returnLabel);
 	res.push_back("D=A");
@@ -829,4 +910,23 @@ vector<string> getReturnAssembly() {
 
 			// goto RET
 			"@R14", "A=M", "0;JMP"};
+}
+
+vector<string> getBootstrapAssembly() {
+
+	Instruction init;
+	init.action = ACTION::CALL;
+	init.label = "Sys.init";
+	init.index = 0;
+
+	string instrstr = getInstruction(init);
+	vector<string> call = getCallAssembly(init);
+	vector<string> res({"// " + instrstr});
+	res.push_back("@256");
+	res.push_back("D=A");
+	res.push_back("@SP");
+	res.push_back("M=D");
+	res.insert(res.end(), call.begin(), call.end());
+
+	return res;
 }

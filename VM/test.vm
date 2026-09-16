@@ -1,9 +1,9 @@
-label LOOP
-goto LOOP
 push constant 2
 push constant 3
-call mult 2
-function mult 2
+push static 1
+pop static 3
+call test.mult 2
+function test.mult 2
 	push constant 0
 	pop local 0
 	push constant 1

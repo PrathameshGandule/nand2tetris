@@ -1,123 +1,114 @@
 # VM Translator
 
-A C++ implementation of the **Virtual Machine Translator** from the [Nand2Tetris](https://www.nand2tetris.org/) course.
+A C++ implementation of the **VM Translator** from the [Nand2Tetris](https://www.nand2tetris.org/) course.
 
-The translator reads a `.vm` file containing stack-based VM commands and generates the corresponding **Hack assembly (`.asm`) code**.
+The translator converts **Virtual Machine (VM) commands** into **Hack assembly (`.asm`) code**.
 
 ## Features
 
-Currently supports the complete **Project 7** VM command set:
+* Arithmetic and logical commands
 
-### Memory Access
+  * `add`, `sub`, `neg`
+  * `and`, `or`, `not`
+  * `eq`, `gt`, `lt`
+* Memory access
 
-* `push constant i`
-* `push/pop local i`
-* `push/pop argument i`
-* `push/pop this i`
-* `push/pop that i`
-* `push/pop static i`
-* `push/pop temp i`
-* `push/pop pointer i`
+  * `push`
+  * `pop`
+  * `local`, `argument`, `this`, `that`
+  * `constant`, `static`, `temp`, `pointer`
+* Program flow
 
-### Arithmetic & Logical Commands
+  * `label`
+  * `goto`
+  * `if-goto`
+* Functions
 
-* `add`
-* `sub`
-* `neg`
-* `eq`
-* `gt`
-* `lt`
-* `and`
-* `or`
-* `not`
+  * `function`
+  * `call`
+  * `return`
+* Bootstrap code for multi-file VM programs
+* Function-scoped labels
+* File-scoped static variables
+* Input validation and error reporting
+* Supports both single `.vm` files and directories containing multiple `.vm` files
 
-The translator also performs input validation for invalid commands, segments, indices, and unsupported command/segment combinations.
+## Requirements
 
-## Architecture
+* C++17 or later
+* A C++ compiler such as `g++`
 
-The translator is divided into a few simple stages:
+## Compilation
 
-```text
-VM source file
-      │
-      ▼
-Remove comments & whitespace
-      │
-      ▼
-Tokenization
-      │
-      ▼
-Validation
-      │
-      ▼
-Instruction representation
-      │
-      ▼
-Assembly generation
-      │
-      ▼
-Hack .asm file
+```bash
+g++ -std=c++17 vm.cpp -o vm
 ```
-
-VM instructions are represented internally using typed enums and an `Instruction` structure rather than being passed around as raw strings.
-
-```cpp
-struct Instruction {
-    ACTION action;
-    SEGMENT segment;
-    int index;
-    int line;
-};
-```
-
-Assembly generation is handled by individual functions for different VM operations and memory segments.
-
-## Static Variables
-
-Static variables are represented using the VM filename:
-
-```text
-push static 0
-```
-
-from:
-
-```text
-Foo.vm
-```
-
-generates assembly referencing:
-
-```asm
-@Foo.0
-```
-
-The Hack assembler then assigns the corresponding symbol to a RAM location.
 
 ## Usage
 
-Compile:
+### Single VM file
 
 ```bash
-g++ vm.cpp -o vm
+./vm SimpleAdd.vm
 ```
 
-Run:
-
-```bash
-./vm Program.vm
-```
-
-This generates:
+This produces:
 
 ```text
-Program.asm
+SimpleAdd.asm
 ```
 
-The generated assembly can then be assembled and executed using the **Nand2Tetris Hack platform tools**.
+Bootstrap code is **not** generated for a single VM file.
 
-## Project Context
+### Directory
 
-This project implements the **VM Translator stage of Nand2Tetris Project 7**, bridging the gap between the stack-based Virtual Machine language and the Hack assembly language.
+```bash
+./vm Program/
+```
 
-The implementation focuses on keeping parsing, validation, and assembly generation separate so that individual VM commands can be translated and tested independently.
+For a directory such as:
+
+```text
+Program/
+├── Main.vm
+├── Math.vm
+└── Sys.vm
+```
+
+the translator produces:
+
+```text
+Program/
+├── Main.vm
+├── Math.vm
+├── Sys.vm
+└── Program.asm
+```
+
+For directory input, bootstrap code is generated once at the beginning of the output and execution starts at `Sys.init`.
+
+## VM → Assembly
+
+For example:
+
+```vm
+push constant 7
+push constant 8
+add
+```
+
+is translated into Hack assembly that pushes `7`, pushes `8`, and adds the two values on the stack.
+
+## Project Structure
+
+```text
+.
+├── vm.cpp
+└── README.md
+```
+
+## About
+
+This project is part of my implementation of the **Nand2Tetris** computer system, specifically the VM Translator stage.
+
+The goal is to understand how a stack-based virtual machine is translated into low-level Hack assembly.

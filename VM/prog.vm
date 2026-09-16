@@ -12,3 +12,6 @@ sub
 
 push constant 36
 pop this 8
+label LOOP
+function mult 2
+label LOOP
