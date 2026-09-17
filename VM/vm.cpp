@@ -255,7 +255,7 @@ int main(int argc, char **argv) {
 	vector<string> tempout;
 	// getting filename as an argument
 	if (argc != 2) {
-		cout << "Usage: ./vm <file.vm | directory>\n";
+		cout << "Usage: vm <file.vm | directory>\n";
 		return STATUS::INPUT_FILE_NOT_PROVIDED;
 	}
 	vector<fs::path> inputfileslist;

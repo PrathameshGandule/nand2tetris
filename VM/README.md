@@ -33,6 +33,8 @@ The translator converts **Virtual Machine (VM) commands** into **Hack assembly (
 * Input validation and error reporting
 * Supports both single `.vm` files and directories containing multiple `.vm` files
 
+> Note: programmer or compiler is supposed to handle uniqueness of labels and function names within files
+
 ## Requirements
 
 * C++17 or later
