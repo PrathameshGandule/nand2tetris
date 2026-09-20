@@ -1,0 +1,16 @@
+class Main {
+	function void main() {
+		var String s;
+		var int energy, i;
+		let s = Keyboard.readLine("Whats on your mind?");
+		let s = s.appendChar(33); // the character '!'
+		let energy = Keyboard.readInt("Whats your energy level?");
+		let i = 0;
+		while (i < energy) {
+			do Output.printString(s);
+			do Output.println();
+			let i = i + 1;
+		}
+		return;
+	}	
+}

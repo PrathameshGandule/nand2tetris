@@ -1,0 +1,7 @@
+          let /* hello*/ a=10;
+		  // hello
+/* multiline
+comment */
+let b="a";
+
+class 
