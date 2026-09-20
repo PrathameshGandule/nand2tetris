@@ -34,7 +34,8 @@
 <symbol> . </symbol>
 <identifier> appendChar </identifier>
 <symbol> ( </symbol>
-<intConst> 33 </intConst>
+<symbol> - </symbol>
+<intConst> 1 </intConst>
 <symbol> ) </symbol>
 <symbol> ; </symbol>
 <keyword> let </keyword>
