@@ -1,0 +1,4 @@
+class simple{
+	static int i, j, k;
+	field boolean isGood, isBad;
+}

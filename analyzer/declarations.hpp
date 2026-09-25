@@ -1,3 +1,6 @@
+#ifndef DECLARATIONS
+#define DECLARATIONS
+
 #include <string>
 #include <unordered_set>
 
@@ -14,6 +17,22 @@ enum STATUS {
 };
 
 enum class TOKENTYPE { KEYWORD, SYMBOL, INTCONST, STRINGCONST, IDENTIFIER };
+
+const std::unordered_set<std::string> keywords{
+	"class", "constructor", "function", "method", "field", "static", "var",
+	"int",	 "char",		"boolean",	"void",	  "true",  "false",	 "null",
+	"this",	 "let",			"do",		"if",	  "else",  "while",	 "return",
+};
+
+const std::unordered_set<char> symbols{
+	'{', '}', '(', ')', '[', ']', '.', ',', ';', '+',
+	'-', '*', '/', '&', '|', '<', '>', '=', '~',
+};
+
+struct Token {
+	TOKENTYPE type;
+	std::string value;
+};
 
 inline std::string tokentypeToString(TOKENTYPE t) {
 	switch (t) {
@@ -32,18 +51,4 @@ inline std::string tokentypeToString(TOKENTYPE t) {
 	}
 }
 
-const std::unordered_set<std::string> keywords{
-	"class", "constructor", "function", "method", "field", "static", "var",
-	"int",	 "char",		"boolean",	"void",	  "true",  "false",	 "null",
-	"this",	 "let",			"do",		"if",	  "else",  "while",	 "return",
-};
-
-const std::unordered_set<char> symbols{
-	'{', '}', '(', ')', '[', ']', '.', ',', ';', '+',
-	'-', '*', '/', '&', '|', '<', '>', '=', '~',
-};
-
-struct Token {
-	TOKENTYPE type;
-	std::string value;
-};
+#endif /* DECLARATIONS */

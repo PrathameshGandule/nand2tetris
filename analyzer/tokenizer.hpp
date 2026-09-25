@@ -1,3 +1,6 @@
+#ifndef TOKENIZER
+#define TOKENIZER
+
 #include "declarations.hpp"
 #include <filesystem>
 #include <string>
@@ -14,14 +17,17 @@ class JackTokenizer {
 	size_t srclen = 0;
 	size_t currentToken = 0;
 	fs::path outputfilename;
+	Token current;
 
   public:
+	JackTokenizer();
 	JackTokenizer(fs::path filepath);
 	void tokenize();
 	void writeXML();
 
 	bool hasMoreTokens();
-	Token advance();
+	void advance();
+	Token currentTokenValue() const;
 	Token peek();
 
 	bool isWhitespace();
@@ -44,3 +50,5 @@ class JackTokenizer {
 	void printTokens();
 	std::string tokenToXML(Token token);
 };
+
+#endif /* TOKENIZER */

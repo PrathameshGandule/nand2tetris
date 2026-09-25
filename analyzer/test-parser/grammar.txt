@@ -1,0 +1,8 @@
+program     → statement*
+
+statement   → "print" expression ";"
+
+expression  → primary ("+" primary)*
+
+primary     → NUMBER
+            | "(" expression ")"

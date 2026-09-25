@@ -3,7 +3,7 @@ class Main {
 		var String s;
 		var int energy, i;
 		let s = Keyboard.readLine("Whats on your mind?");
-		let s = s.appendChar(32768); // the character '!'
+		let s = s.appendChar(32767); // the character '!'
 		let energy = Keyboard.readInt("Whats your energy level?");
 		let i = 0;
 		while (i < energy) {

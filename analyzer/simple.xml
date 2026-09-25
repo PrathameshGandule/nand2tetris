@@ -1,0 +1,28 @@
+<class>
+    <keyword> class </keyword>
+    <identifier> simple </identifier>
+    <symbol> { </symbol>
+    <classVarDec>
+        <keyword> static </keyword>
+        <type>
+            <keyword> int </keyword>
+        </type>
+        <identifier> i </identifier>
+        <symbol> , </symbol>
+        <identifier> j </identifier>
+        <symbol> , </symbol>
+        <identifier> k </identifier>
+        <symbol> ; </symbol>
+    </classVarDec>
+    <classVarDec>
+        <keyword> field </keyword>
+        <type>
+            <keyword> boolean </keyword>
+        </type>
+        <identifier> isGood </identifier>
+        <symbol> , </symbol>
+        <identifier> isBad </identifier>
+        <symbol> ; </symbol>
+    </classVarDec>
+    <symbol> } </symbol>
+</class>

@@ -1,6 +1,6 @@
 #include "tokenizer.hpp"
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <stdexcept>
 
 JackTokenizer::JackTokenizer(fs::path filepath) {
@@ -11,7 +11,7 @@ JackTokenizer::JackTokenizer(fs::path filepath) {
 	}
 	std::cout << "Input file : " << filepath << "\n";
 	logic = std::string{(std::istreambuf_iterator<char>(ifile)),
-				   std::istreambuf_iterator<char>()};
+						std::istreambuf_iterator<char>()};
 	ifile.close();
 	pos = 0;
 	srclen = logic.length();
@@ -19,25 +19,18 @@ JackTokenizer::JackTokenizer(fs::path filepath) {
 
 void JackTokenizer::tokenize() {
 	while (pos < srclen) {
-		// whitespcaes
 		if (isWhitespace()) {
 			handleWhitespce();
-			// single line comments
 		} else if (isSingleLineComment()) {
 			handleSingleLineComment();
-			// multiline comments
 		} else if (isMultiLineComment()) {
 			handleMultiLineComment();
-			// symbols
 		} else if (isSymbol()) {
 			handleSymbol();
-			// string constants
 		} else if (isStringConstant()) {
 			handleStringConstant();
-			// digits
 		} else if (isIntegerConstant()) {
 			handleIntegerConstant();
-			// keywords and identifiers
 		} else if (isIdentifierStart()) {
 			handleKeywordsAndIdentifiers();
 		} else {
@@ -54,7 +47,7 @@ void JackTokenizer::writeXML() {
 	std::ofstream ofile(outputfilename);
 	if (!ofile) {
 		throw std::runtime_error("error opening output file: " +
-							outputfilename.string());
+								 outputfilename.string());
 	}
 
 	// write generated output to the output file
@@ -64,22 +57,20 @@ void JackTokenizer::writeXML() {
 	ofile.close();
 }
 
-bool JackTokenizer::hasMoreTokens() {
-    return currentToken < tokens.size();
+bool JackTokenizer::hasMoreTokens() { return currentToken < tokens.size(); }
+
+void JackTokenizer::advance() {
+	if (hasMoreTokens())
+		current = tokens.at(currentToken++);
 }
 
-Token JackTokenizer::advance() {
-    if (!hasMoreTokens())
-        throw std::runtime_error("No more tokens");
-
-    return tokens[currentToken++];
-}
+Token JackTokenizer::currentTokenValue() const { return current; }
 
 Token JackTokenizer::peek() {
-    if (!hasMoreTokens())
-        throw std::runtime_error("No more tokens");
+	if (!hasMoreTokens())
+		throw std::runtime_error("No more tokens");
 
-    return tokens[currentToken];
+	return tokens[currentToken];
 }
 
 bool JackTokenizer::isWhitespace() {
@@ -118,14 +109,19 @@ void JackTokenizer::handleSymbol() {
 
 bool JackTokenizer::isStringConstant() { return logic[pos] == '"'; }
 void JackTokenizer::handleStringConstant() {
-	size_t start = pos;
-	pos++;
+	size_t start = pos++;
 	while (pos < srclen && logic[pos] != '"') {
+		if (logic[pos] == '\n' || logic[pos] == '\r') {
+			throw std::runtime_error("Unterminated string constant");
+		}
 		pos++;
+	}
+	if (pos >= srclen) {
+		throw std::runtime_error("Unterminated string constant");
 	}
 	std::string val = logic.substr(start + 1, pos - start - 1);
 	tokens.push_back({TOKENTYPE::STRINGCONST, val});
-	pos++;
+	pos++; // closing "
 }
 
 bool JackTokenizer::isIntegerConstant() { return isdigit(logic[pos]); }
@@ -136,8 +132,9 @@ void JackTokenizer::handleIntegerConstant() {
 		pos++;
 	std::string val = logic.substr(start, pos - start);
 	int intval = stoi(val);
-	if(intval < 0 || intval > 32767){
-		throw std::runtime_error("integer constant out of range!!! : [ "+val+" ]");
+	if (intval < 0 || intval > 32767) {
+		throw std::runtime_error("integer constant out of range!!! : [ " + val +
+								 " ]");
 	}
 	tokens.push_back({TOKENTYPE::INTCONST, val});
 }
