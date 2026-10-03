@@ -22,24 +22,31 @@ class CompilationEngine {
 	CompilationEngine(JackTokenizer &tokenizer, std::ofstream &output);
 
 	void compileClass();
-
 	void compileClassVarDec();
 	void compileType();
-	void compileSubroutine();
+	void compileSubroutineDec();
 	void compileParameterList();
 	void compileSubroutineBody();
 	void compileVarDec();
+	void compileClassName();
+	void compileSubroutineName();
+	void compileVarName();
 
 	void compileStatements();
-	void compileLet();
-	void compileIf();
-	void compileWhile();
-	void compileDo();
-	void compileReturn();
+	void compileStatement();
+	void compileLetStatement();
+	void compileIfStatement();
+	void compileWhileStatement();
+	void compileDoStatement();
+	void compileReturnStatement();
 
 	void compileExpression();
 	void compileTerm();
+	void compileSubroutineCall();
 	void compileExpressionList();
+	void compileOp();
+	void compileUnaryOp();
+	void compileKeywordConstant();
 };
 
 #endif /* COMPILATION_ENGINE */

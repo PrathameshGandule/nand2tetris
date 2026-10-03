@@ -1,17 +1,25 @@
 <class>
     <keyword> class </keyword>
-    <identifier> simple </identifier>
+    <className>
+        <identifier> simple </identifier>
+    </className>
     <symbol> { </symbol>
     <classVarDec>
         <keyword> static </keyword>
         <type>
             <keyword> int </keyword>
         </type>
-        <identifier> i </identifier>
+        <varName>
+            <identifier> i </identifier>
+        </varName>
         <symbol> , </symbol>
-        <identifier> j </identifier>
+        <varName>
+            <identifier> j </identifier>
+        </varName>
         <symbol> , </symbol>
-        <identifier> k </identifier>
+        <varName>
+            <identifier> k </identifier>
+        </varName>
         <symbol> ; </symbol>
     </classVarDec>
     <classVarDec>
@@ -19,10 +27,67 @@
         <type>
             <keyword> boolean </keyword>
         </type>
-        <identifier> isGood </identifier>
+        <varName>
+            <identifier> isGood </identifier>
+        </varName>
         <symbol> , </symbol>
-        <identifier> isBad </identifier>
+        <varName>
+            <identifier> isBad </identifier>
+        </varName>
         <symbol> ; </symbol>
     </classVarDec>
+    <subroutineDec>
+        <keyword> function </keyword>
+        <type>
+            <keyword> int </keyword>
+        </type>
+        <subroutineName>
+            <identifier> simple </identifier>
+        </subroutineName>
+        <symbol> ( </symbol>
+        <parameterList>
+            <type>
+                <keyword> int </keyword>
+            </type>
+            <varName>
+                <identifier> a </identifier>
+            </varName>
+            <symbol> , </symbol>
+            <type>
+                <keyword> int </keyword>
+            </type>
+            <varName>
+                <identifier> b </identifier>
+            </varName>
+            <symbol> , </symbol>
+            <type>
+                <keyword> boolean </keyword>
+            </type>
+            <varName>
+                <identifier> toProcess </identifier>
+            </varName>
+        </parameterList>
+        <symbol> ) </symbol>
+        <subroutineBody>
+            <symbol> { </symbol>
+            <varDec>
+                <keyword> var </keyword>
+                <type>
+                    <keyword> int </keyword>
+                </type>
+                <varName>
+                    <identifier> temp1 </identifier>
+                </varName>
+                <symbol> , </symbol>
+                <varName>
+                    <identifier> temp2 </identifier>
+                </varName>
+                <symbol> ; </symbol>
+            </varDec>
+            <statements>
+            </statements>
+            <symbol> } </symbol>
+        </subroutineBody>
+    </subRoutineDec>
     <symbol> } </symbol>
 </class>

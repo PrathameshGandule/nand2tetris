@@ -1,4 +1,7 @@
 class simple{
 	static int i, j, k;
 	field boolean isGood, isBad;
+	function int simple (int a, int b, boolean toProcess){
+		var int temp1, temp2;
+	}
 }
