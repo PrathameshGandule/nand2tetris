@@ -13,6 +13,8 @@ class CompilationEngine {
 
 	void process(const std::string &expected);
 	void processIdentifier();
+	void processIntegerConst();
+	void processStringConst();
 	void writeToken(const Token &token);
 	void printIndent();
 	void openTag(const std::string &tag);

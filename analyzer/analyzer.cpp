@@ -77,6 +77,7 @@ int main(int argc, char **argv) {
 			CompilationEngine parser(tokenizer, ofile);
 			tokenizer.advance();
 			parser.compileClass();
+			std::cout<<"Outputfile : "<<outputfilename<<"\n";
 		}
 
 		return 0;

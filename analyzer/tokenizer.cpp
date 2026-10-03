@@ -67,10 +67,10 @@ void JackTokenizer::advance() {
 Token JackTokenizer::currentTokenValue() const { return current; }
 
 Token JackTokenizer::peek() {
-	if (!hasMoreTokens())
-		throw std::runtime_error("No more tokens");
+	if (currentToken >= tokens.size())
+		throw std::runtime_error("No next token");
 
-	return tokens[currentToken];
+	return tokens.at(currentToken);
 }
 
 bool JackTokenizer::isWhitespace() {

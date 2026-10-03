@@ -1,0 +1,110 @@
+class GrammarTest {
+
+    // classVarDec
+    static int x, y, z;
+    field boolean flag;
+    field char letter;
+    field Point point;
+
+    // constructor + parameterList + varDec
+    constructor GrammarTest new(int a, boolean enabled, Point p) {
+        var int i, j;
+        var char c;
+        var Point localPoint;
+
+        let x = 10;
+        let y = x + a;
+        let z = x * y - 2;
+
+        let flag = true;
+        let letter = "A";
+
+        // array access
+        let arr[2] = x;
+        let arr[i + 1] = y * 2;
+
+        return this;
+    }
+
+    // function + empty parameterList
+    function void testExpressions() {
+        var int a;
+        var boolean b;
+
+        // integer constant
+        let a = 123;
+
+        // keyword constants
+        let b = true;
+        let b = false;
+        let b = null;
+
+        // binary operators
+        let a = 1 + 2;
+        let a = 5 - 3;
+        let a = 2 * 4;
+        let a = 8 / 2;
+        let b = true & false;
+        let b = true | false;
+        let b = a < 10;
+        let b = a > 0;
+        let b = a = 5;
+
+        // unary operators
+        let a = -a;
+        let b = ~b;
+
+        // parentheses
+        let a = (1 + 2) * 3;
+
+        return;
+    }
+
+    // method + parameterList
+    method int calculate(int a, int b, boolean condition) {
+        var int result;
+
+        // if without else
+        if (condition) {
+            let result = a + b;
+        }
+
+        // if with else
+        if (a < b) {
+            let result = b - a;
+        } else {
+            let result = a - b;
+        }
+
+        // while
+        while (result < 100) {
+            let result = result + 1;
+        }
+
+        return result;
+    }
+
+    // subroutine calls
+    function void calls() {
+        var int result;
+
+        // subroutineName(...)
+        do testExpressions();
+
+        // subroutineName(expressionList)
+        do calculate(1, 2, true);
+
+        // className.subroutineName(...)
+        do Math.multiply(2, 3);
+
+        // varName.subroutineName(...)
+        do point.draw();
+
+        // multiple expression arguments
+        do Output.printInt(x + y);
+        do Output.printInt(x * 2 + y);
+        do Screen.drawRectangle(0, 0, 100, 100);
+
+        return;
+    }
+}

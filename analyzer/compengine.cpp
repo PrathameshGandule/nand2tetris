@@ -53,6 +53,27 @@ void CompilationEngine::processIdentifier() {
 	tokenizer.advance();
 }
 
+void CompilationEngine::processIntegerConst() {
+	Token current = tokenizer.currentTokenValue();
+	if (current.type != TOKENTYPE::INTCONST) {
+		throw std::runtime_error(
+			"Expected : " + tokentypeToString(TOKENTYPE::INTCONST) +
+			" got : " + tokentypeToString(current.type) + "");
+	}
+	writeToken(current);
+	tokenizer.advance();
+}
+void CompilationEngine::processStringConst() {
+	Token current = tokenizer.currentTokenValue();
+	if (current.type != TOKENTYPE::STRINGCONST) {
+		throw std::runtime_error(
+			"Expected : " + tokentypeToString(TOKENTYPE::STRINGCONST) +
+			" got : " + tokentypeToString(current.type) + "");
+	}
+	writeToken(current);
+	tokenizer.advance();
+}
+
 // 'class' className '{' classVarDec* subRoutineDec* '}'
 void CompilationEngine::compileClass() {
 	openTag("class");
@@ -147,7 +168,7 @@ void CompilationEngine::compileSubroutineDec() {
 	process(")");
 	compileSubroutineBody();
 
-	closeTag("subRoutineDec");
+	closeTag("subroutineDec");
 }
 
 // ((type varName) (',' type varName)*)?
@@ -341,12 +362,150 @@ void CompilationEngine::compileReturnStatement() {
 	closeTag("returnStatement");
 }
 
+// term (op term)*
 void CompilationEngine::compileExpression() {
-	
+	openTag("expression");
+
+	compileTerm();
+	while (tokenizer.currentTokenValue().value == "+" ||
+		   tokenizer.currentTokenValue().value == "-" ||
+		   tokenizer.currentTokenValue().value == "*" ||
+		   tokenizer.currentTokenValue().value == "/" ||
+		   tokenizer.currentTokenValue().value == "&" ||
+		   tokenizer.currentTokenValue().value == "|" ||
+		   tokenizer.currentTokenValue().value == "<" ||
+		   tokenizer.currentTokenValue().value == ">" ||
+		   tokenizer.currentTokenValue().value == "=") {
+		compileOp();
+		compileTerm();
+	}
+
+	closeTag("expression");
 }
-void CompilationEngine::compileTerm() {}
-void CompilationEngine::compileSubroutineCall() {}
-void CompilationEngine::compileExpressionList() {}
-void CompilationEngine::compileOp() {}
-void CompilationEngine::compileUnaryOp() {}
-void CompilationEngine::compileKeywordConstant() {}
+
+// integerConstant | stringConstant | keywordConstant | varName | varName '['
+// expression ']' | subroutineCall | '(' expression ')' | unaryOp term
+void CompilationEngine::compileTerm() {
+	openTag("term");
+
+	Token current = tokenizer.currentTokenValue();
+
+	if (current.type == TOKENTYPE::INTCONST) {
+		processIntegerConst();
+	} else if (current.type == TOKENTYPE::STRINGCONST) {
+		processStringConst();
+	} else if (current.value == "true" || current.value == "false" ||
+			   current.value == "null" || current.value == "this") {
+		compileKeywordConstant();
+	} else if (current.value == "-" || current.value == "~") {
+		compileUnaryOp();
+		compileTerm();
+	} else if (current.value == "(") {
+		process("(");
+		compileExpression();
+		process(")");
+	} else if (current.type == TOKENTYPE::IDENTIFIER) {
+		Token next = tokenizer.peek();
+		if (next.value == "[") {
+			compileVarName();
+			process("[");
+			compileExpression();
+			process("]");
+		} else if (next.value == "(" || next.value == ".") {
+			compileSubroutineCall();
+		} else {
+			compileVarName();
+		}
+	} else {
+		throw std::runtime_error("Invalid term, got : '" + current.value + "'");
+	}
+
+	closeTag("term");
+}
+
+// subroutineName '(' expressionList ')' | 
+// (className | varName) '.' subroutineName '(' expressionList ')'
+void CompilationEngine::compileSubroutineCall() {
+	openTag("subroutineCall");
+
+	processIdentifier();
+	if (tokenizer.currentTokenValue().value == "(") {
+		process("(");
+		compileExpressionList();
+		process(")");
+	} else if (tokenizer.currentTokenValue().value == ".") {
+		process(".");
+		processIdentifier();
+		process("(");
+		compileExpressionList();
+		process(")");
+	}
+
+	closeTag("subroutineCall");
+}
+
+// (expression (',' expression)* )?
+void CompilationEngine::compileExpressionList() {
+	openTag("expressionList");
+
+	if(tokenizer.currentTokenValue().value == ")"){
+		closeTag("expressionList");
+		return;
+	}
+
+	compileExpression();
+	while(tokenizer.currentTokenValue().value == ","){
+		process(",");
+		compileExpression();
+	}
+
+	closeTag("expressionList");
+}
+
+// '+' | '-' | '*' | '/' | '&' | '|' | '<' | '>' | '='
+void CompilationEngine::compileOp() {
+	openTag("op");
+
+	Token current = tokenizer.currentTokenValue();
+	if (current.value == "+" || current.value == "-" || current.value == "*" ||
+		current.value == "/" || current.value == "&" || current.value == "|" ||
+		current.value == "<" || current.value == ">" || current.value == "=") {
+		process(current.value);
+	} else {
+		throw std::runtime_error("Expected operator , got '" + current.value +
+								 "'");
+	}
+
+	closeTag("op");
+}
+
+// '-' | '~'
+void CompilationEngine::compileUnaryOp() {
+	openTag("unaryOp");
+
+	Token current = tokenizer.currentTokenValue();
+	if (current.value == "-" || current.value == "~") {
+		process(current.value);
+	} else {
+		throw std::runtime_error("Expected unary operator , got '" +
+								 current.value + "'");
+	}
+
+	closeTag("unaryOp");
+}
+
+// 'true' | 'false' | 'null' | 'this'
+void CompilationEngine::compileKeywordConstant() {
+	openTag("keywordConstant");
+
+	Token current = tokenizer.currentTokenValue();
+	if (current.value == "true" || current.value == "false" ||
+		current.value == "null" || current.value == "this") {
+		process(current.value);
+	} else {
+		throw std::runtime_error("Expected keyword constant , got '" +
+								 current.value + "'");
+	}
+
+	closeTag("keywordConstant");
+}

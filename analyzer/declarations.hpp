@@ -41,9 +41,9 @@ inline std::string tokentypeToString(TOKENTYPE t) {
 	case TOKENTYPE::SYMBOL:
 		return "symbol";
 	case TOKENTYPE::INTCONST:
-		return "intConst";
+		return "integerConstant";
 	case TOKENTYPE::STRINGCONST:
-		return "stringConst";
+		return "stringConstant";
 	case TOKENTYPE::IDENTIFIER:
 		return "identifier";
 	default:
