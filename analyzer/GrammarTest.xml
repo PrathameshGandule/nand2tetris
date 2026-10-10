@@ -54,6 +54,16 @@
         </varName>
         <symbol> ; </symbol>
     </classVarDec>
+    <classVarDec>
+        <keyword> static </keyword>
+        <type>
+            <keyword> boolean </keyword>
+        </type>
+        <varName>
+            <identifier> toRenew </identifier>
+        </varName>
+        <symbol> ; </symbol>
+    </classVarDec>
     <subroutineDec>
         <keyword> constructor </keyword>
         <type>

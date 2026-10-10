@@ -4,10 +4,20 @@
 #include "declarations.hpp"
 #include "tokenizer.hpp"
 #include <fstream>
+#include <unordered_map>
 class CompilationEngine {
   private:
 	JackTokenizer &tokenizer;
 	std::ofstream &output;
+	Symbol sym;
+	// std::vector<Symbol> classSymbols;
+	std::unordered_map<std::string, Symbol> classSymbols;
+	std::vector<Symbol> functionSymbols;
+
+	bool isFunctionSymbolActive = false;
+
+	int fieldcnt = 0;
+	int staticcnt = 0;
 
 	int indent = 0;
 
@@ -49,6 +59,8 @@ class CompilationEngine {
 	void compileOp();
 	void compileUnaryOp();
 	void compileKeywordConstant();
+
+	void printsyms();
 };
 
 #endif /* COMPILATION_ENGINE */

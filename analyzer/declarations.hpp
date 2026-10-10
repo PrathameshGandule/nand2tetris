@@ -34,6 +34,13 @@ struct Token {
 	std::string value;
 };
 
+struct Symbol{
+	std::string name;
+	std::string type;
+	std::string kind;
+	int index;
+};
+
 inline std::string tokentypeToString(TOKENTYPE t) {
 	switch (t) {
 	case TOKENTYPE::KEYWORD:

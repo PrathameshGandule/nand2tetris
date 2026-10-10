@@ -2,8 +2,12 @@
 #include "declarations.hpp"
 #include "tokenizer.hpp"
 #include <fstream>
+#include <iostream>
+#include <iterator>
+#include <ostream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 CompilationEngine::CompilationEngine(JackTokenizer &tokenizer,
 									 std::ofstream &output)
@@ -98,12 +102,14 @@ void CompilationEngine::compileClass() {
 	process("}");
 	// std::cout << "8. done with process }\n";
 
+	printsyms();
 	closeTag("class");
 }
 
 // ('static' | 'field') type varName (',' varName)* ';'
 void CompilationEngine::compileClassVarDec() {
 	openTag("classVarDec");
+
 	// std::cout << "6. inside classVarDec\n";
 
 	Token current = tokenizer.currentTokenValue();
@@ -112,11 +118,39 @@ void CompilationEngine::compileClassVarDec() {
 		throw std::runtime_error("Expected 'static' or 'field', got : '" +
 								 current.value + "'");
 	}
+	sym.kind = current.value;
 	process(current.value);
+	sym.type = tokenizer.currentTokenValue().value;
 	compileType();
+	sym.name = tokenizer.currentTokenValue().value;
+	if (sym.kind == "field") {
+		sym.index = fieldcnt;
+		fieldcnt++;
+	} else {
+		sym.index = staticcnt;
+		staticcnt++;
+	}
+	if (classSymbols.find(sym.name) != classSymbols.end()) {
+		throw std::runtime_error("variable '" + sym.name +
+								 "' already declared!!!");
+	}
+	classSymbols[sym.name] = {sym.name, sym.type, sym.kind, sym.index};
 	compileVarName();
 	while (tokenizer.currentTokenValue().value == ",") {
 		process(",");
+		sym.name = tokenizer.currentTokenValue().value;
+		if (sym.kind == "field") {
+			sym.index = fieldcnt;
+			fieldcnt++;
+		} else {
+			sym.index = staticcnt;
+			staticcnt++;
+		}
+		if (classSymbols.find(sym.name) != classSymbols.end()) {
+			throw std::runtime_error("variable '" + sym.name +
+									 "' already declared!!!");
+		}
+		classSymbols[sym.name] = {sym.name, sym.type, sym.kind, sym.index};
 		compileVarName();
 	}
 	process(";");
@@ -195,7 +229,7 @@ void CompilationEngine::compileParameterList() {
 // '{' varDec* statements '}'
 void CompilationEngine::compileSubroutineBody() {
 	openTag("subroutineBody");
-
+	int a = 1;
 	process("{");
 
 	while (tokenizer.currentTokenValue().value == "var") {
@@ -212,7 +246,6 @@ void CompilationEngine::compileSubroutineBody() {
 // 'var' type varName (',' varName)* ';'
 void CompilationEngine::compileVarDec() {
 	openTag("varDec");
-
 	process("var");
 	compileType();
 	compileVarName();
@@ -423,7 +456,7 @@ void CompilationEngine::compileTerm() {
 	closeTag("term");
 }
 
-// subroutineName '(' expressionList ')' | 
+// subroutineName '(' expressionList ')' |
 // (className | varName) '.' subroutineName '(' expressionList ')'
 void CompilationEngine::compileSubroutineCall() {
 	openTag("subroutineCall");
@@ -448,13 +481,13 @@ void CompilationEngine::compileSubroutineCall() {
 void CompilationEngine::compileExpressionList() {
 	openTag("expressionList");
 
-	if(tokenizer.currentTokenValue().value == ")"){
+	if (tokenizer.currentTokenValue().value == ")") {
 		closeTag("expressionList");
 		return;
 	}
 
 	compileExpression();
-	while(tokenizer.currentTokenValue().value == ","){
+	while (tokenizer.currentTokenValue().value == ",") {
 		process(",");
 		compileExpression();
 	}
@@ -508,4 +541,14 @@ void CompilationEngine::compileKeywordConstant() {
 	}
 
 	closeTag("keywordConstant");
+}
+
+void CompilationEngine::printsyms() {
+	std::string res = "";
+	res = "SYMBOL TABLE\n\nname\ttype\tkind\tindex\n\n";
+	for (auto &sym : classSymbols) {
+		res += sym.second.name + "\t" + sym.second.type + "\t" + sym.second.kind + "\t" +
+			   std::to_string(sym.second.index) + "\n";
+	}
+	std::cout << res << std::endl;
 }

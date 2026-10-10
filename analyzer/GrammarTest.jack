@@ -5,6 +5,7 @@ class GrammarTest {
     field boolean flag;
     field char letter;
     field Point point;
+	static boolean toRenew;
 
     // constructor + parameterList + varDec
     constructor GrammarTest new(int a, boolean enabled, Point p) {
