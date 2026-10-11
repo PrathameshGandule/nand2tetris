@@ -9,15 +9,20 @@ class CompilationEngine {
   private:
 	JackTokenizer &tokenizer;
 	std::ofstream &output;
-	Symbol sym;
+	std::string currentClassName = "";
+	std::string currentSubroutineName = "";
+	Symbol csym;
+	Symbol fsym;
 	// std::vector<Symbol> classSymbols;
 	std::unordered_map<std::string, Symbol> classSymbols;
-	std::vector<Symbol> functionSymbols;
+	std::unordered_map<std::string, Symbol> functionSymbols;
 
 	bool isFunctionSymbolActive = false;
 
 	int fieldcnt = 0;
 	int staticcnt = 0;
+	int argcnt = 0;
+	int localcnt = 0;
 
 	int indent = 0;
 
@@ -60,7 +65,8 @@ class CompilationEngine {
 	void compileUnaryOp();
 	void compileKeywordConstant();
 
-	void printsyms();
+	void printClassSyms();
+	void printSubroutineSyms();
 };
 
 #endif /* COMPILATION_ENGINE */

@@ -64,7 +64,7 @@
                 <keyword> boolean </keyword>
             </type>
             <varName>
-                <identifier> toProcess </identifier>
+                <identifier> toProc </identifier>
             </varName>
         </parameterList>
         <symbol> ) </symbol>
@@ -88,6 +88,6 @@
             </statements>
             <symbol> } </symbol>
         </subroutineBody>
-    </subRoutineDec>
+    </subroutineDec>
     <symbol> } </symbol>
 </class>
