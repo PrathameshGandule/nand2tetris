@@ -1,4 +1,4 @@
-#include "compengine.hpp"
+#include "compengineVM.hpp"
 #include "declarations.hpp"
 #include "tokenizer.hpp"
 #include <exception>
@@ -66,9 +66,8 @@ int main(int argc, char **argv) {
 		for (auto const &filepath : inputfileslist) {
 			JackTokenizer tokenizer(filepath);
 			tokenizer.tokenize();
-			// tokenizer.writeXML();
 			fs::path outputfilename = filepath;
-			outputfilename.replace_extension(".xml");
+			outputfilename.replace_extension(".vm");
 			std::ofstream ofile(outputfilename);
 			if (!ofile) {
 				throw std::runtime_error("error opening output file: " +

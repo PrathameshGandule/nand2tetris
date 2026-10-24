@@ -12,6 +12,7 @@ class GrammarTest {
         var int i, j;
         var char c;
         var Point localPoint;
+		var Array arr;
 
         let x = 10;
         let y = x + a;
@@ -86,7 +87,7 @@ class GrammarTest {
     }
 
     // subroutine calls
-    function void calls() {
+    method void calls() {
         var int result;
 
         // subroutineName(...)

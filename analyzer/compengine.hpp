@@ -35,6 +35,8 @@ class CompilationEngine {
 	void openTag(const std::string &tag);
 	void closeTag(const std::string &tag);
 
+	void writePush();
+
   public:
 	CompilationEngine(JackTokenizer &tokenizer, std::ofstream &output);
 

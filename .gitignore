@@ -2,3 +2,4 @@ VM/hackvm
 assembler/hackasm
 mytest
 analyzer/analyzer
+analyzer/compiler

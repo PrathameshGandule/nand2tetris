@@ -605,7 +605,7 @@ void CompilationEngine::compileKeywordConstant() {
 }
 
 void CompilationEngine::printClassSyms() {
-	std::string res = "SYMBOL TABLE\n\nname\t\ttype\t\tkind\t\tindex\n\n";
+	std::string res = "SYMBOL TABLE\nname\t\ttype\t\tkind\t\tindex\n";
 	for (auto &sym : classSymbols) {
 		res += sym.second.name + "\t\t" + sym.second.type + "\t\t" +
 			   sym.second.kind + "\t\t" + std::to_string(sym.second.index) + "\n";
@@ -616,7 +616,7 @@ void CompilationEngine::printClassSyms() {
 
 void CompilationEngine::printSubroutineSyms() {
 	std::string res = "\n'" + currentSubroutineName +
-					  "' SYMBOL TABLE\n\nname\t\ttype\t\tkind\t\tindex\n\n";
+					  "' SYMBOL TABLE\nname\t\ttype\t\tkind\t\tindex\n";
 	for (auto &sym : functionSymbols) {
 		res += sym.second.name + "\t\t" + sym.second.type + "\t\t" +
 			   sym.second.kind + "\t\t" + std::to_string(sym.second.index) + "\n";
