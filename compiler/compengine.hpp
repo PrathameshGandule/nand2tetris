@@ -1,0 +1,74 @@
+#ifndef COMPILATION_ENGINE
+#define COMPILATION_ENGINE
+
+#include "declarations.hpp"
+#include "tokenizer.hpp"
+#include <fstream>
+#include <unordered_map>
+class CompilationEngine {
+  private:
+	JackTokenizer &tokenizer;
+	std::ofstream &output;
+	std::string currentClassName = "";
+	std::string currentSubroutineName = "";
+	Symbol csym;
+	Symbol fsym;
+	// std::vector<Symbol> classSymbols;
+	std::unordered_map<std::string, Symbol> classSymbols;
+	std::unordered_map<std::string, Symbol> functionSymbols;
+
+	bool isFunctionSymbolActive = false;
+
+	int fieldcnt = 0;
+	int staticcnt = 0;
+	int argcnt = 0;
+	int localcnt = 0;
+
+	int indent = 0;
+
+	void process(const std::string &expected);
+	void processIdentifier();
+	void processIntegerConst();
+	void processStringConst();
+	void writeToken(const Token &token);
+	void printIndent();
+	void openTag(const std::string &tag);
+	void closeTag(const std::string &tag);
+
+	void writePush();
+
+  public:
+	CompilationEngine(JackTokenizer &tokenizer, std::ofstream &output);
+
+	void compileClass();
+	void compileClassVarDec();
+	void compileType();
+	void compileSubroutineDec();
+	void compileParameterList();
+	void compileSubroutineBody();
+	void compileVarDec();
+	void compileClassName();
+	void compileSubroutineName();
+	void compileVarName();
+
+	void compileStatements();
+	void compileStatement();
+	void compileLetStatement();
+	void compileIfStatement();
+	void compileWhileStatement();
+	void compileDoStatement();
+	void compileReturnStatement();
+
+	void compileExpression();
+	void compileTerm();
+	void compileSubroutineCall();
+	void compileExpressionList();
+	void compileOp();
+	void compileUnaryOp();
+	void compileKeywordConstant();
+
+	void printClassSyms();
+	void printSubroutineSyms();
+};
+
+#endif /* COMPILATION_ENGINE */
