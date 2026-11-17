@@ -1,0 +1,75 @@
+function Main.main 7
+push constant 50
+pop local 4
+push local 4
+push local 4
+call Math.multiply 2
+pop local 6
+push constant 76
+pop local 1
+label WHILE_EXP0
+push local 1
+push constant 176
+lt
+not
+if-goto WHILE_END1
+push constant 206
+pop local 0
+label WHILE_EXP2
+push local 0
+push constant 306
+lt
+not
+if-goto WHILE_END3
+push local 0
+push constant 256
+sub
+pop local 2
+push local 1
+push constant 126
+sub
+pop local 3
+push local 2
+push local 2
+call Math.multiply 2
+push local 3
+push local 3
+call Math.multiply 2
+add
+pop local 5
+push local 5
+push local 6
+lt
+if-goto IF_TRUE4
+goto IF_FALSE5
+label IF_TRUE4
+push constant 0
+not
+call Screen.setColor 1
+pop temp 0
+push local 0
+push local 1
+call Screen.drawPixel 2
+pop temp 0
+label IF_FALSE5
+push local 0
+push constant 1
+add
+pop local 0
+goto WHILE_EXP2
+label WHILE_END3
+push local 1
+push constant 1
+add
+pop local 1
+goto WHILE_EXP0
+label WHILE_END1
+label WHILE_EXP7
+push constant 0
+not
+not
+if-goto WHILE_END8
+goto WHILE_EXP7
+label WHILE_END8
+push constant 0
+return

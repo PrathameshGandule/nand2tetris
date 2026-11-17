@@ -1,0 +1,36 @@
+
+class Main {
+    function void main() {
+        var int x, y;
+        var int dx, dy;
+        var int radius;
+        var int distance;
+        var int radiusSquared;
+
+        let radius = 50;
+        let radiusSquared = radius * radius;
+
+        let y = 76;
+        while (y < 176) {
+            let x = 206;
+            while (x < 306) {
+                let dx = x - 256;
+                let dy = y - 126;
+                let distance = (dx * dx) + (dy * dy);
+
+                if (distance < radiusSquared) {
+                    do Screen.setColor(true);
+                    do Screen.drawPixel(x, y);
+                }
+
+                let x = x + 1;
+            }
+            let y = y + 1;
+        }
+
+        while (true) {
+        }
+
+        return;
+    }
+}
