@@ -1,5 +1,7 @@
 VM/hackvm
 assembler/hackasm
 mytest
-analyzer/analyzer
-analyzer/compiler
+compiler/analyzer
+compiler/compiler
+CPUEmulator/cpu
+src
