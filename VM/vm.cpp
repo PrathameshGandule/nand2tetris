@@ -2,9 +2,11 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <queue>
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 using namespace std;
 
@@ -223,6 +225,11 @@ vector<string> handleInstruction(const Instruction &instruction);
 string getInstruction(const Instruction &ins);
 // gets next true and end symbols according to the counter
 SymbolPair getNextSymbols(ACTION action);
+// to eliminate deadcode
+unordered_map<string, vector<string>>
+buildCallGraph(const vector<fs::path> &files);
+unordered_set<string>
+findReachableFunctions(const unordered_map<string, vector<string>> &callGraph);
 
 vector<string> getPushConstantAssembly(const Instruction &ins);
 vector<string> getPopGenAssembly(const Instruction &ins);
@@ -314,6 +321,27 @@ int main(int argc, char **argv) {
 	}
 
 	string inputfilename;
+	// --------------------------------------------------
+	// Function-level dead-code elimination
+	// --------------------------------------------------
+	unordered_set<string> reachableFunctions;
+	bool enableDCE = false;
+
+	if (fs::is_directory(canoninp)) {
+		auto callGraph = buildCallGraph(inputfileslist);
+
+		// Only enable DCE if this is a program with Sys.init.
+		// This preserves existing behavior for VM test directories
+		// that do not use the standard bootstrap entry point.
+		if (callGraph.find("Sys.init") != callGraph.end()) {
+			reachableFunctions = findReachableFunctions(callGraph);
+			enableDCE = true;
+
+			cout << "Dead-code elimination enabled\n";
+			cout << "Reachable functions: " << reachableFunctions.size()
+				 << '\n';
+		}
+	}
 	for (fs::path &file : inputfileslist) {
 		currentFunction = "";
 		inputfilename = file;
@@ -335,6 +363,7 @@ int main(int argc, char **argv) {
 		staticVarName = file.filename().stem().string();
 
 		vector<Instruction> instructions;
+		string parsingFunction = "";
 		Instruction ins;
 		int linecnt = 0;
 		string line;
@@ -410,10 +439,10 @@ int main(int argc, char **argv) {
 								cleanedline);
 					return STATUS::INVALID_INSTR;
 				}
-				if (action == ACTION::PUSH && segment == SEGMENT::CONSTANT && i > 32767) {
+				if (action == ACTION::PUSH && segment == SEGMENT::CONSTANT &&
+					i > 32767) {
 					reporterror(inputfilename, linecnt,
-								"index greater than 32767!!!",
-								cleanedline);
+								"index greater than 32767!!!", cleanedline);
 					return STATUS::INVALID_INSTR;
 				}
 				if (segment == SEGMENT::TEMP && (i < 0 || i > 7)) {
@@ -487,6 +516,18 @@ int main(int argc, char **argv) {
 					return STATUS::INVALID_LABEL;
 				}
 				ins.label = label;
+			}
+
+			// Track which function this instruction belongs to.
+			if (ins.action == ACTION::FUNCTION) {
+				parsingFunction = ins.label;
+			}
+
+			// Skip instructions belonging to unreachable functions.
+			if (enableDCE && !parsingFunction.empty() &&
+				reachableFunctions.find(parsingFunction) ==
+					reachableFunctions.end()) {
+				continue;
 			}
 
 			ins.line = linecnt;
@@ -929,4 +970,70 @@ vector<string> getBootstrapAssembly() {
 	res.insert(res.end(), call.begin(), call.end());
 
 	return res;
+}
+
+unordered_map<string, vector<string>>
+buildCallGraph(const vector<fs::path> &files) {
+	unordered_map<string, vector<string>> callGraph;
+
+	for (const auto &file : files) {
+		ifstream input(file);
+		string line;
+		string current = "";
+
+		while (getline(input, line)) {
+			string cleaned = trim(line);
+			if (cleaned.empty()) {
+				continue;
+			}
+
+			stringstream ss(cleaned);
+			string action, name;
+			ss >> action;
+
+			if (action == "function") {
+				ss >> name;
+				current = name;
+
+				// Ensure functions with no calls still appear in the graph.
+				callGraph[current];
+			} else if (action == "call" && !current.empty()) {
+				ss >> name;
+				callGraph[current].push_back(name);
+			}
+		}
+	}
+
+	return callGraph;
+}
+
+unordered_set<string>
+findReachableFunctions(const unordered_map<string, vector<string>> &callGraph) {
+	unordered_set<string> reachable;
+	queue<string> pending;
+
+	if (callGraph.find("Sys.init") == callGraph.end()) {
+		return reachable;
+	}
+
+	pending.push("Sys.init");
+	reachable.insert("Sys.init");
+
+	while (!pending.empty()) {
+		string current = pending.front();
+		pending.pop();
+
+		auto it = callGraph.find(current);
+		if (it == callGraph.end()) {
+			continue;
+		}
+
+		for (const string &callee : it->second) {
+			if (reachable.insert(callee).second) {
+				pending.push(callee);
+			}
+		}
+	}
+
+	return reachable;
 }
