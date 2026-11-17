@@ -15,7 +15,7 @@ int main(int argc, char **argv) {
 
 		// checking for arguments provided
 		if (argc != 2) {
-			std::cout << "Usage : analyzer <file.jack | directory>\n";
+			std::cout << "Usage : jack <file.jack | directory>\n";
 			return STATUS::INPUT_NOT_PROVIDED;
 		}
 
